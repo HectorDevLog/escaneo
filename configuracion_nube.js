@@ -1,8 +1,3 @@
-// =========================================================
-// CONFIGURACIÓN DE LA CONEXIÓN A GOOGLE SHEETS
-// =========================================================
-
-// TU ENLACE ACTUALIZADO
 const GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbxDAOGJQBMkWcn9n9zB5Y7r4blD_9-eKkqDLPz5sawe-Laa9uU-OPQY48A2yI-dOBVk/exec"; 
 
 function enviarAGoogleSheets(pedido, operadorActual, fechaLarga) {

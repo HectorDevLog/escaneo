@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FlexNet Ops - Gestión de Distribución</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -32,8 +33,7 @@
         }
         .nav-link:hover { background: rgba(255,255,255,0.05); color: white; }
         .nav-link.active { background: var(--primary); color: white; }
-        .btn-logout { margin-top: auto; background: #334155; color: #f8fafc; text-align: center; cursor: pointer; }
-        .btn-logout:hover { background: var(--danger); }
+        .btn-logout { margin-top: auto; background: #334155; color: #f8fafc; text-align: center; cursor: pointer; padding: 10px; border-radius: 8px; }
 
         /* MAIN CONTENT */
         .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; }
@@ -59,11 +59,22 @@
         td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
         tr:hover { background: #f8fafc; }
 
+        .text-truncate {
+            max-width: 250px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: inline-block;
+            vertical-align: middle;
+            font-size: 0.85rem;
+        }
+
         .badge { padding: 5px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; display: inline-block; }
         .btn-action { padding: 8px 12px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; font-size: 0.8rem; transition: 0.2s; }
         .btn-del { background: #fee2e2; color: #b91c1c; }
         .btn-del:hover { background: #ef4444; color: white; }
         .btn-primary { background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .btn-primary:disabled { background: #cbd5e1; cursor: not-allowed; }
 
         /* NOTIFICATIONS */
         #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
@@ -79,12 +90,12 @@
     <div class="sidebar">
         <div class="brand">📦 FlexNet Ops</div>
         <nav>
-            <a href="#" class="nav-link active">Módulo Distribución</a>
+            <a href="escaneo.html" class="nav-link active">Módulo Distribución</a>
             <a href="cargar_eventos.html" class="nav-link">Módulo Eventos</a>
             <a href="cargar_guias.html" class="nav-link">Asignar Guías</a>
             <a href="carta_porte.html" class="nav-link">Carta Porte</a>
         </nav>
-        <div class="nav-link btn-logout" onclick="cerrarSesion()">Cerrar Sesión</div>
+        <div class="btn-logout" onclick="cerrarSesion()">Cerrar Sesión</div>
     </div>
 
     <div class="main-content">
@@ -92,7 +103,7 @@
             <div>
                 <h1>Distribución de Carga</h1>
                 <div class="stats">
-                    <span>Total escaneado: <span class="stat-val" id="lblTotal">0</span></span>
+                    <span>Total hoy: <span class="stat-val" id="lblTotal">0</span></span>
                     <span>Mostrando: <span class="stat-val" id="lblVisibles">0</span></span>
                 </div>
             </div>
@@ -104,27 +115,30 @@
         <div class="card">
             <div class="grid-inputs">
                 <div>
-                    <label>1. Cargar Monitor (Excel)</label>
+                    <label id="fileLabel">1. Cargar Monitor (Excel)</label>
                     <input type="file" id="fileUpload" accept=".xlsx, .xls, .csv">
                 </div>
                 <div>
-                    <label>2. Filtrar por Ciudad</label>
+                    <label>2. Filtrar y Bloquear por Ciudad</label>
                     <select id="filtroCiudad" disabled onchange="renderizarTabla()">
-                        <option value="GENERAL">Todas las ciudades</option>
+                        <option value="GENERAL">Todas las ciudades (Modo Libre)</option>
                         <option value="QUITO">QUITO</option>
                         <option value="GUAYAQUIL">GUAYAQUIL</option>
                         <option value="CUENCA">CUENCA</option>
+                        <option value="AMBATO">AMBATO</option>
+                        <option value="SANTO DOMINGO">SANTO DOMINGO</option>
+                        <option value="SANTA ANA">SANTA ANA</option>
                     </select>
                 </div>
                 <div>
-                    <label>3. Escaneo Individual</label>
+                    <label>3. Escaneo Individual Automático</label>
                     <input type="text" id="scannerInput" placeholder="Escanea código..." disabled autocomplete="off">
                 </div>
             </div>
             <div style="margin-top: 20px;">
-                <label>Escaneo Masivo (Pegar lista)</label>
+                <label>4. Escaneo Masivo (Pegar lista de IDs)</label>
                 <div style="display: flex; gap: 10px;">
-                    <textarea id="bulkInput" rows="1" placeholder="Pega aquí los IDs..." disabled style="resize: none;"></textarea>
+                    <textarea id="bulkInput" rows="1" placeholder="Pega aquí los IDs separados por espacios o saltos de línea..." disabled style="resize: none;"></textarea>
                     <button class="btn-primary" id="btnProcesarMasivo" disabled>Procesar</button>
                 </div>
             </div>
@@ -139,6 +153,7 @@
                         <th>Referencia</th>
                         <th>Estado</th>
                         <th>Cliente</th>
+                        <th>Dirección</th>
                         <th>Ciudad</th>
                         <th style="text-align: right;">Acciones</th>
                     </tr>
@@ -155,11 +170,19 @@
         let monitorData = []; 
         let pedidosEscaneadosLista = []; 
         let memoriaPedidos = new Set(); 
-        let temporizadorEscaner;
         let operadorActual = "";
 
-        function getStorageKey() { return 'pedidos_scan_' + (operadorActual || 'anonimo'); }
+        // 🌟 FUNCIÓN CLAVE ACTUALIZADA: Usa localForage (IndexedDB) para no tener límite de tamaño
+        async function guardarEstadoLocal() {
+            try {
+                await localforage.setItem('monitorData_flexnet', monitorData);
+                await localforage.setItem('pedidosEscaneados_flexnet', pedidosEscaneadosLista);
+            } catch (e) {
+                console.error("Error guardando en memoria de base de datos local.", e);
+            }
+        }
 
+        // AL CARGAR LA PÁGINA
         window.onload = async function() {
             operadorActual = localStorage.getItem('operador_actual');
             if (!operadorActual) { window.location.href = 'index.html'; return; }
@@ -167,77 +190,300 @@
             document.getElementById('lblOperador').innerText = operadorActual;
             document.getElementById('lblFecha').innerText = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' }).toUpperCase();
 
-            const yaSincronizado = sessionStorage.getItem('sincronizado_nube');
-            const datosLocales = localStorage.getItem(getStorageKey());
+            // 🌟 RESTAURAR SESIÓN AL VOLVER DE OTRA PESTAÑA (Soporta archivos gigantes)
+            try {
+                const savedMonitor = await localforage.getItem('monitorData_flexnet');
+                const savedPedidos = await localforage.getItem('pedidosEscaneados_flexnet');
 
-            if (yaSincronizado && datosLocales) {
-                pedidosEscaneadosLista = JSON.parse(datosLocales);
-                actualizarMemoria();
-                renderizarTabla();
-            } else {
-                await sincronizarConNube();
+                if (savedMonitor && savedMonitor.length > 0) {
+                    monitorData = savedMonitor;
+                    
+                    // Activamos la interfaz
+                    ['filtroCiudad', 'scannerInput', 'bulkInput', 'btnProcesarMasivo'].forEach(id => document.getElementById(id).disabled = false);
+                    
+                    // Indicador de que el monitor está vivo
+                    document.getElementById('fileLabel').innerHTML = "✅ Monitor Activo en Memoria";
+                    document.getElementById('fileLabel').style.color = "var(--success)";
+                    
+                    if (savedPedidos) {
+                        pedidosEscaneadosLista = savedPedidos;
+                        pedidosEscaneadosLista.forEach(p => memoriaPedidos.add(String(p.idpedido)));
+                    }
+                    renderizarTabla();
+                    mostrarNotificacion("✅ Monitor restaurado de la memoria. Puedes continuar.");
+                }
+            } catch (e) {
+                console.error("No se pudo restaurar la memoria:", e);
+                localforage.clear();
             }
         };
 
+        // AL CARGAR UN NUEVO MONITOR EXCEL
+        document.getElementById('fileUpload').addEventListener('change', function(e) {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
+                const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                
+                // Extraemos solo lo necesario para mayor rapidez (Agregamos Nro_Remito)
+                monitorData = rawData.map(row => ({
+                    idpedido: String(row.idpedido || ''),
+                    Nro_Referencia: String(row.Nro_Referencia || row.Referencia || '-'),
+                    Estado: String(row.Estado || 'EN_TRANSITO'),
+                    Cliente: String(row.Cliente || 'S/C'),
+                    Direccion: String(row.direccion || row.Direccion || row.DIRECCION || '---'),
+                    Localidad: String(row.Localidad || row.Ciudad || 'GENERAL'),
+                    Nro_Remito: String(row.Nro_Remito || row.Remito || '') // <-- AGREGADO AQUÍ
+                })).filter(row => row.idpedido !== ''); 
+                
+                ['filtroCiudad', 'scannerInput', 'bulkInput', 'btnProcesarMasivo'].forEach(id => document.getElementById(id).disabled = false);
+                document.getElementById('fileLabel').innerHTML = "✅ Monitor Activo en Memoria";
+                document.getElementById('fileLabel').style.color = "var(--success)";
+                
+                mostrarNotificacion("✅ Nuevo Monitor cargado. Sincronizando con Google...");
+                
+                pedidosEscaneadosLista = [];
+                memoriaPedidos.clear();
+                
+                await sincronizarConNube();
+            };
+            reader.readAsArrayBuffer(e.target.files[0]);
+        });
+
+        // FUNCIÓN DE SINCRONIZACIÓN
         async function sincronizarConNube() {
-            mostrarNotificacion("🔄 Sincronizando con la nube...");
             try {
-                const baseUrl = GOOGLE_SHEET_URL.replace('/library', '').split('/d/')[0] + '/macros/s/' + GOOGLE_SHEET_URL.split('/d/')[1].split('/')[0] + '/exec';
-                const res = await fetch(`${baseUrl}?operacion=consultar_carga&operador=${encodeURIComponent(operadorActual)}`);
-                const datos = await res.json();
+                const urlFinal = `${GOOGLE_SHEET_URL}?operacion=consultar_carga&operador=${encodeURIComponent(operadorActual)}`;
+                const res = await fetch(urlFinal);
+                if (!res.ok) throw new Error("Error en red HTTP");
+                
+                const datosNube = await res.json();
+                const hoy = new Date();
+                let recuperados = 0;
 
-                if (datos && Array.isArray(datos) && datos.length > 0) {
-                    pedidosEscaneadosLista = datos.map(p => ({
-                        idpedido: p.idpedido || p.id,
-                        Nro_Referencia: p.referencia || "-",
-                        Estado: p.estado || "ESCANEADO",
-                        Cliente: p.cliente || "S/C",
-                        Localidad: p.ciudad || p.localidad || "GENERAL"
-                    }));
-                    actualizarMemoria();
-                    sessionStorage.setItem('sincronizado_nube', 'true');
-                    guardarLocal();
+                if (Array.isArray(datosNube)) {
+                    datosNube.forEach(p => {
+                        if (!p.idpedido) return;
+
+                        let esHoy = false;
+                        let valFechaStr = String(p.fechasistema || p.fecha || "").toUpperCase();
+                        let diaActual = hoy.getDate().toString();
+                        let mesActual = hoy.toLocaleDateString('es-ES', { month: 'long' }).toUpperCase();
+                        let anioActual = hoy.getFullYear().toString();
+                        
+                        if (valFechaStr.includes(diaActual) && valFechaStr.includes(mesActual) && valFechaStr.includes(anioActual)) {
+                            esHoy = true;
+                        }
+
+                        if (esHoy && !memoriaPedidos.has(String(p.idpedido))) {
+                            memoriaPedidos.add(String(p.idpedido));
+                            
+                            const infoExcel = monitorData.find(row => row.idpedido === String(p.idpedido) || row.Nro_Referencia === String(p.idpedido));
+                            
+                            pedidosEscaneadosLista.push({
+                                idpedido: p.idpedido,
+                                Nro_Referencia: infoExcel ? infoExcel.Nro_Referencia : (p.referencia || '-'),
+                                Estado: infoExcel ? infoExcel.Estado : (p.estado || 'EN_TRANSITO'),
+                                Cliente: infoExcel ? infoExcel.Cliente : 'S/C',
+                                Direccion: infoExcel ? infoExcel.Direccion : '---',
+                                Localidad: infoExcel ? infoExcel.Localidad : (p.ciudad || 'GENERAL'),
+                                Nro_Remito: infoExcel ? infoExcel.Nro_Remito : '' // <-- AGREGADO AQUÍ
+                            });
+                            recuperados++;
+                        }
+                    });
+
                     renderizarTabla();
-                }
-            } catch (e) { console.error(e); }
-        }
+                    await guardarEstadoLocal(); // Guardamos el estado masivo
 
-        async function eliminarPedido(id) {
-            if (!confirm(`¿Deseas eliminar el pedido ${id} definitivamente de la nube?`)) return;
-
-            mostrarNotificacion("⏳ Eliminando de Google Sheets...");
-            
-            try {
-                const baseUrl = GOOGLE_SHEET_URL.replace('/library', '').split('/d/')[0] + '/macros/s/' + GOOGLE_SHEET_URL.split('/d/')[1].split('/')[0] + '/exec';
-                const res = await fetch(baseUrl, {
-                    method: 'POST',
-                    body: JSON.stringify({ action: 'eliminar_pedido', idpedido: id })
-                });
-                const resultado = await res.json();
-
-                if (resultado.status === "success") {
-                    pedidosEscaneadosLista = pedidosEscaneadosLista.filter(p => String(p.idpedido) !== String(id));
-                    actualizarMemoria();
-                    guardarLocal();
-                    renderizarTabla();
-                    mostrarNotificacion("✅ Eliminado correctamente", "#22c55e");
-                } else {
-                    alert("Error al eliminar en la nube.");
+                    if (recuperados > 0) {
+                        mostrarNotificacion(`✅ Se restauraron ${recuperados} pedidos escaneados HOY`);
+                    } else {
+                        mostrarNotificacion("ℹ️ No tienes escaneos previos registrados para el día de hoy.");
+                    }
                 }
             } catch (e) {
-                alert("Error de conexión al intentar eliminar.");
+                mostrarNotificacion("⚠️ Error de conexión con la nube", "#ef4444");
             }
         }
 
-        function actualizarMemoria() {
-            memoriaPedidos.clear();
-            pedidosEscaneadosLista.forEach(p => memoriaPedidos.add(String(p.idpedido)));
+        // PROCESAR CÓDIGO (INDIVIDUAL Y MASIVO)
+        async function procesarCodigo(codigo, masivo = false) {
+            let clean = String(codigo).trim(); 
+            if (!clean) return;
+            if (clean.endsWith("-1")) clean = clean.slice(0, -2);
+
+            if (memoriaPedidos.has(clean)) {
+                mostrarNotificacion(`⚠️ El pedido ${clean} ya se escaneó hoy`, "#f59e0b");
+                return;
+            }
+
+            const info = monitorData.find(row => row.idpedido === clean || row.Nro_Referencia === clean);
+
+            if (info) {
+                const filtroActual = document.getElementById('filtroCiudad').value;
+                const ciudadPaquete = String(info.Localidad || 'GENERAL').toUpperCase().trim();
+
+                if (filtroActual !== "GENERAL" && ciudadPaquete !== filtroActual) {
+                    mostrarNotificacion(`🚫 Bloqueado: ID ${clean} es de ${ciudadPaquete}`, "#ef4444");
+                    return; 
+                }
+
+                memoriaPedidos.add(String(info.idpedido));
+                
+                const nuevoPedido = {
+                    idpedido: info.idpedido,
+                    Nro_Referencia: info.Nro_Referencia,
+                    Estado: info.Estado,
+                    Cliente: info.Cliente,
+                    Direccion: info.Direccion,
+                    Localidad: ciudadPaquete,
+                    Nro_Remito: info.Nro_Remito // <-- AGREGADO AQUÍ
+                };
+                
+                pedidosEscaneadosLista.push(nuevoPedido);
+                guardarEstadoLocal(); // Se ejecuta en segundo plano
+                
+                await enviarAGoogleSheets(nuevoPedido);
+                
+                if (!masivo) {
+                    renderizarTabla();
+                    mostrarNotificacion(`✅ Pedido ${info.idpedido} registrado`);
+                }
+            } else {
+                mostrarNotificacion(`❌ ID ${clean} no se encuentra en el Monitor`, "#ef4444");
+            }
         }
 
-        function guardarLocal() {
-            localStorage.setItem(getStorageKey(), JSON.stringify(pedidosEscaneadosLista));
-            localStorage.setItem('pedidos_scan', JSON.stringify(pedidosEscaneadosLista));
+        // ENVÍO DE DATOS A GOOGLE SHEETS
+        async function enviarAGoogleSheets(p) {
+            try {
+                const opcionesFecha = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                const fechaLarga = new Date().toLocaleDateString('es-ES', opcionesFecha).toUpperCase();
+
+                const payload = {
+                    fecha: fechaLarga,
+                    usuario: operadorActual,
+                    idpedido: p.idpedido,
+                    referencia: p.Nro_Referencia,
+                    estado: p.Estado,
+                    ciudad: p.Localidad
+                };
+
+                fetch(GOOGLE_SHEET_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify(payload)
+                });
+            } catch (e) { 
+                console.error("Error envío Sheets:", e); 
+            }
         }
+
+        function getColorCiudad(ciudad) {
+            const c = String(ciudad).toUpperCase().trim();
+            if (c.includes('QUITO')) return '#3b82f6'; 
+            if (c.includes('GUAYAQUIL')) return '#0ea5e9'; 
+            if (c.includes('CUENCA')) return '#8b5cf6'; 
+            if (c.includes('AMBATO')) return '#f59e0b'; 
+            if (c.includes('SANTO DOMINGO')) return '#10b981'; 
+            if (c.includes('SANTA ANA')) return '#ec4899'; 
+            return '#64748b'; 
+        }
+
+        // RENDERIZADO DE TABLA EN PANTALLA
+        function renderizarTabla() {
+            const tbody = document.getElementById('listaPedidos');
+            const filtro = document.getElementById('filtroCiudad').value;
+            tbody.innerHTML = '';
+
+            let filtrados = (filtro === "GENERAL") 
+                ? [...pedidosEscaneadosLista] 
+                : pedidosEscaneadosLista.filter(p => String(p.Localidad || "").toUpperCase().trim() === filtro);
+
+            filtrados.reverse().forEach((p, i) => {
+                const tr = document.createElement('tr');
+                const badgeEstado = p.Estado?.includes('ENTRE') ? 'var(--success)' : (p.Estado?.includes('NOVE') ? 'var(--danger)' : 'var(--warning)');
+                const badgeCiudad = getColorCiudad(p.Localidad);
+                const direccionTexto = p.Direccion || '---';
+                
+                tr.innerHTML = `
+                    <td>${filtrados.length - i}</td>
+                    <td><b>${p.idpedido}</b></td>
+                    <td>${p.Nro_Referencia || '-'}</td>
+                    <td><span class="badge" style="background:${badgeEstado}; color:white">${p.Estado}</span></td>
+                    <td>${p.Cliente}</td>
+                    <td><span class="text-truncate" title="${direccionTexto}">${direccionTexto}</span></td>
+                    <td><span class="badge" style="background:${badgeCiudad}; color:white">${p.Localidad}</span></td>
+                    <td style="text-align:right">
+                        <button class="btn-action btn-del" onclick="eliminarPedido('${p.idpedido}')">Quitar</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('lblTotal').innerText = pedidosEscaneadosLista.length;
+            document.getElementById('lblVisibles').innerText = filtrados.length;
+        }
+
+        // ELIMINAR PEDIDO DE LA NUBE
+        async function eliminarPedido(id) {
+            if (!confirm(`¿Estás seguro de eliminar el pedido ${id} de tu lista de hoy?`)) return;
+            
+            try {
+                pedidosEscaneadosLista = pedidosEscaneadosLista.filter(p => String(p.idpedido) !== String(id));
+                memoriaPedidos.delete(String(id));
+                renderizarTabla();
+                guardarEstadoLocal(); 
+                
+                mostrarNotificacion("🗑️ Pedido quitado de la tabla", "#f59e0b");
+
+                fetch(GOOGLE_SHEET_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify({ action: 'eliminar_pedido', idpedido: id })
+                }).then(() => {
+                    mostrarNotificacion("☁️ Borrado confirmado en la nube", "var(--success)");
+                });
+            } catch (e) { 
+                mostrarNotificacion("Error al intentar comunicarse con la nube.", "#ef4444"); 
+            }
+        }
+
+        // --- INPUTS Y EVENTOS AUTOMÁTICOS ---
+        document.getElementById('scannerInput').addEventListener('input', function(e) {
+            let val = this.value.trim();
+            if (/^\d{7}$/.test(val) || val.endsWith('-1')) {
+                procesarCodigo(val);
+                this.value = ''; 
+            }
+        });
+
+        document.getElementById('scannerInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && this.value.trim() !== '') {
+                procesarCodigo(this.value);
+                this.value = '';
+            }
+        });
+
+        document.getElementById('btnProcesarMasivo').addEventListener('click', async function() {
+            const input = document.getElementById('bulkInput');
+            const ids = [...new Set(input.value.split(/[\n\t\s,]+/).filter(Boolean))];
+            
+            this.disabled = true;
+            this.innerText = "Procesando...";
+            
+            for (let id of ids) {
+                await procesarCodigo(id, true);
+                await new Promise(r => setTimeout(r, 40)); 
+            }
+            
+            renderizarTabla();
+            input.value = '';
+            this.disabled = false;
+            this.innerText = "Procesar";
+            mostrarNotificacion("✅ Procesamiento masivo finalizado");
+        });
 
         function mostrarNotificacion(msg, color) {
             const toast = document.createElement('div');
@@ -245,78 +491,15 @@
             if(color) toast.style.background = color;
             toast.innerText = msg;
             document.getElementById('toast-container').appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
+            setTimeout(() => toast.remove(), 4000); 
         }
 
-        document.getElementById('fileUpload').addEventListener('change', function(e) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
-                monitorData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-                ['filtroCiudad', 'scannerInput', 'bulkInput', 'btnProcesarMasivo'].forEach(id => document.getElementById(id).disabled = false);
-                mostrarNotificacion("✅ Monitor cargado");
-            };
-            reader.readAsArrayBuffer(e.target.files[0]);
-        });
-
-        function renderizarTabla() {
-            const tbody = document.getElementById('listaPedidos');
-            const filtro = document.getElementById('filtroCiudad').value;
-            tbody.innerHTML = '';
-            let lista = (filtro === "GENERAL") ? [...pedidosEscaneadosLista].reverse() : pedidosEscaneadosLista.filter(p => (p.Localidad || "").toUpperCase().trim() === filtro).reverse();
-
-            lista.forEach((p, i) => {
-                const tr = document.createElement('tr');
-                const cEst = p.Estado.includes('ENTRE') ? 'var(--success)' : p.Estado.includes('NOVE') ? 'var(--danger)' : 'var(--warning)';
-                const cCiu = p.Localidad.includes('QUITO') ? 'var(--info)' : p.Localidad.includes('GUAYA') ? 'var(--primary)' : 'var(--primary-dark)';
-
-                tr.innerHTML = `
-                    <td>${i+1}</td>
-                    <td><b>${p.idpedido}</b></td>
-                    <td>${p.Nro_Referencia || '-'}</td>
-                    <td><span class="badge" style="background:${cEst}; color:white">${p.Estado}</span></td>
-                    <td>${p.Cliente}</td>
-                    <td><span class="badge" style="background:${cCiu}; color:white">${p.Localidad}</span></td>
-                    <td style="text-align:right"><button class="btn-action btn-del" onclick="eliminarPedido('${p.idpedido}')">Quitar</button></td>
-                `;
-                tbody.appendChild(tr);
-            });
-            document.getElementById('lblTotal').innerText = pedidosEscaneadosLista.length;
-            document.getElementById('lblVisibles').innerText = lista.length;
-        }
-
-        function cerrarSesion() {
-            sessionStorage.removeItem('sincronizado_nube');
+        // 🌟 LIMPIAR LA BASE DE DATOS LOCAL AL SALIR
+        async function cerrarSesion() {
             localStorage.removeItem('operador_actual');
+            await localforage.clear();
             window.location.href = 'index.html';
         }
-
-        // --- EL RESTO DE TUS FUNCIONES DE ESCANEO SIGUEN IGUAL ---
-        document.getElementById('scannerInput').addEventListener('input', function() {
-            clearTimeout(temporizadorEscaner);
-            temporizadorEscaner = setTimeout(() => { procesarCodigo(this.value); this.value = ''; }, 100);
-        });
-
-        function procesarCodigo(codigo, masivo = false) {
-            let clean = codigo.trim(); if (!clean) return;
-            if (clean.endsWith("-1")) clean = clean.slice(0, -2);
-            const p = monitorData.find(row => String(row.idpedido) === clean || String(row.Nro_Referencia) === clean);
-            if (p) {
-                if (memoriaPedidos.has(String(p.idpedido))) return;
-                memoriaPedidos.add(String(p.idpedido));
-                pedidosEscaneadosLista.push(p);
-                enviarAGoogleSheets(p, operadorActual, document.getElementById('lblFecha').innerText);
-                if (!masivo) renderizarTabla();
-            }
-        }
-
-        document.getElementById('btnProcesarMasivo').addEventListener('click', async function() {
-            const input = document.getElementById('bulkInput');
-            const codes = [...new Set(input.value.split(/[\n\t\s,]+/).filter(Boolean))];
-            this.disabled = true;
-            for (let c of codes) { procesarCodigo(c, true); await new Promise(r => setTimeout(resolve, 400)); }
-            renderizarTabla(); input.value = ''; this.disabled = false;
-        });
     </script>
 </body>
 </html>
