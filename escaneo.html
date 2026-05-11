@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlexNet Ops - Gestión de Distribución</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4f46e5; --primary-dark: #4338ca;
+            --bg: #f8fafc; --sidebar: #0f172a;
+            --text-main: #1e293b; --text-muted: #64748b;
+            --white: #ffffff; --danger: #ef4444; --success: #22c55e;
+            --warning: #f59e0b; --info: #0ea5e9;
+        }
+
+        body { 
+            font-family: 'Inter', sans-serif; background-color: var(--bg); 
+            margin: 0; display: flex; height: 100vh; color: var(--text-main);
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            width: 260px; background-color: var(--sidebar); color: white;
+            display: flex; flex-direction: column; padding: 20px; flex-shrink: 0;
+        }
+        .brand { font-size: 1.5rem; font-weight: 800; margin-bottom: 40px; display: flex; align-items: center; gap: 10px; }
+        .nav-link {
+            padding: 12px 15px; border-radius: 8px; color: #94a3b8; text-decoration: none;
+            font-weight: 600; margin-bottom: 5px; transition: all 0.2s; display: block;
+        }
+        .nav-link:hover { background: rgba(255,255,255,0.05); color: white; }
+        .nav-link.active { background: var(--primary); color: white; }
+        .btn-logout { margin-top: auto; background: #334155; color: #f8fafc; text-align: center; cursor: pointer; }
+        .btn-logout:hover { background: var(--danger); }
+
+        /* MAIN CONTENT */
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .header h1 { margin: 0; font-size: 1.8rem; font-weight: 800; }
+        .user-pill { background: white; padding: 8px 18px; border-radius: 50px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); font-weight: 600; border: 1px solid #e2e8f0; }
+
+        /* CARDS */
+        .card { background: var(--white); border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; margin-bottom: 25px; }
+        .grid-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        
+        label { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+        input, select, textarea { 
+            width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; 
+            font-family: inherit; font-size: 0.95rem; box-sizing: border-box; transition: border-color 0.2s;
+        }
+        input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
+
+        /* TABLE */
+        .table-container { background: white; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { background: #f1f5f9; padding: 15px; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; }
+        td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
+        tr:hover { background: #f8fafc; }
+
+        .badge { padding: 5px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; display: inline-block; }
+        .btn-action { padding: 8px 12px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; font-size: 0.8rem; transition: 0.2s; }
+        .btn-del { background: #fee2e2; color: #b91c1c; }
+        .btn-del:hover { background: #ef4444; color: white; }
+        .btn-primary { background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+
+        /* NOTIFICATIONS */
+        #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
+        .toast { background: var(--sidebar); color: white; padding: 16px 24px; border-radius: 10px; margin-top: 10px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2); animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .stats { display: flex; gap: 20px; margin-top: 10px; }
+        .stat-val { font-weight: 800; color: var(--primary); }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="brand">📦 FlexNet Ops</div>
+        <nav>
+            <a href="#" class="nav-link active">Módulo Distribución</a>
+            <a href="cargar_eventos.html" class="nav-link">Módulo Eventos</a>
+            <a href="cargar_guias.html" class="nav-link">Asignar Guías</a>
+            <a href="carta_porte.html" class="nav-link">Carta Porte</a>
+        </nav>
+        <div class="nav-link btn-logout" onclick="cerrarSesion()">Cerrar Sesión</div>
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <div>
+                <h1>Distribución de Carga</h1>
+                <div class="stats">
+                    <span>Total escaneado: <span class="stat-val" id="lblTotal">0</span></span>
+                    <span>Mostrando: <span class="stat-val" id="lblVisibles">0</span></span>
+                </div>
+            </div>
+            <div class="user-pill">
+                <span id="lblOperador">---</span> • <span id="lblFecha" style="color:var(--text-muted); font-size: 0.8rem;">---</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="grid-inputs">
+                <div>
+                    <label>1. Cargar Monitor (Excel)</label>
+                    <input type="file" id="fileUpload" accept=".xlsx, .xls, .csv">
+                </div>
+                <div>
+                    <label>2. Filtrar por Ciudad</label>
+                    <select id="filtroCiudad" disabled onchange="renderizarTabla()">
+                        <option value="GENERAL">Todas las ciudades</option>
+                        <option value="QUITO">QUITO</option>
+                        <option value="GUAYAQUIL">GUAYAQUIL</option>
+                        <option value="CUENCA">CUENCA</option>
+                    </select>
+                </div>
+                <div>
+                    <label>3. Escaneo Individual</label>
+                    <input type="text" id="scannerInput" placeholder="Escanea código..." disabled autocomplete="off">
+                </div>
+            </div>
+            <div style="margin-top: 20px;">
+                <label>Escaneo Masivo (Pegar lista)</label>
+                <div style="display: flex; gap: 10px;">
+                    <textarea id="bulkInput" rows="1" placeholder="Pega aquí los IDs..." disabled style="resize: none;"></textarea>
+                    <button class="btn-primary" id="btnProcesarMasivo" disabled>Procesar</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>N°</th>
+                        <th>ID Pedido</th>
+                        <th>Referencia</th>
+                        <th>Estado</th>
+                        <th>Cliente</th>
+                        <th>Ciudad</th>
+                        <th style="text-align: right;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="listaPedidos"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script src="configuracion_nube.js"></script>
+    <script>
+        let monitorData = []; 
+        let pedidosEscaneadosLista = []; 
+        let memoriaPedidos = new Set(); 
+        let temporizadorEscaner;
+        let operadorActual = "";
+
+        function getStorageKey() { return 'pedidos_scan_' + (operadorActual || 'anonimo'); }
+
+        window.onload = async function() {
+            operadorActual = localStorage.getItem('operador_actual');
+            if (!operadorActual) { window.location.href = 'index.html'; return; }
+
+            document.getElementById('lblOperador').innerText = operadorActual;
+            document.getElementById('lblFecha').innerText = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' }).toUpperCase();
+
+            const yaSincronizado = sessionStorage.getItem('sincronizado_nube');
+            const datosLocales = localStorage.getItem(getStorageKey());
+
+            if (yaSincronizado && datosLocales) {
+                pedidosEscaneadosLista = JSON.parse(datosLocales);
+                actualizarMemoria();
+                renderizarTabla();
+            } else {
+                await sincronizarConNube();
+            }
+        };
+
+        async function sincronizarConNube() {
+            mostrarNotificacion("🔄 Sincronizando con la nube...");
+            try {
+                const baseUrl = GOOGLE_SHEET_URL.replace('/library', '').split('/d/')[0] + '/macros/s/' + GOOGLE_SHEET_URL.split('/d/')[1].split('/')[0] + '/exec';
+                const res = await fetch(`${baseUrl}?operacion=consultar_carga&operador=${encodeURIComponent(operadorActual)}`);
+                const datos = await res.json();
+
+                if (datos && Array.isArray(datos) && datos.length > 0) {
+                    pedidosEscaneadosLista = datos.map(p => ({
+                        idpedido: p.idpedido || p.id,
+                        Nro_Referencia: p.referencia || "-",
+                        Estado: p.estado || "ESCANEADO",
+                        Cliente: p.cliente || "S/C",
+                        Localidad: p.ciudad || p.localidad || "GENERAL"
+                    }));
+                    actualizarMemoria();
+                    sessionStorage.setItem('sincronizado_nube', 'true');
+                    guardarLocal();
+                    renderizarTabla();
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        async function eliminarPedido(id) {
+            if (!confirm(`¿Deseas eliminar el pedido ${id} definitivamente de la nube?`)) return;
+
+            mostrarNotificacion("⏳ Eliminando de Google Sheets...");
+            
+            try {
+                const baseUrl = GOOGLE_SHEET_URL.replace('/library', '').split('/d/')[0] + '/macros/s/' + GOOGLE_SHEET_URL.split('/d/')[1].split('/')[0] + '/exec';
+                const res = await fetch(baseUrl, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'eliminar_pedido', idpedido: id })
+                });
+                const resultado = await res.json();
+
+                if (resultado.status === "success") {
+                    pedidosEscaneadosLista = pedidosEscaneadosLista.filter(p => String(p.idpedido) !== String(id));
+                    actualizarMemoria();
+                    guardarLocal();
+                    renderizarTabla();
+                    mostrarNotificacion("✅ Eliminado correctamente", "#22c55e");
+                } else {
+                    alert("Error al eliminar en la nube.");
+                }
+            } catch (e) {
+                alert("Error de conexión al intentar eliminar.");
+            }
+        }
+
+        function actualizarMemoria() {
+            memoriaPedidos.clear();
+            pedidosEscaneadosLista.forEach(p => memoriaPedidos.add(String(p.idpedido)));
+        }
+
+        function guardarLocal() {
+            localStorage.setItem(getStorageKey(), JSON.stringify(pedidosEscaneadosLista));
+            localStorage.setItem('pedidos_scan', JSON.stringify(pedidosEscaneadosLista));
+        }
+
+        function mostrarNotificacion(msg, color) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            if(color) toast.style.background = color;
+            toast.innerText = msg;
+            document.getElementById('toast-container').appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        document.getElementById('fileUpload').addEventListener('change', function(e) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
+                monitorData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                ['filtroCiudad', 'scannerInput', 'bulkInput', 'btnProcesarMasivo'].forEach(id => document.getElementById(id).disabled = false);
+                mostrarNotificacion("✅ Monitor cargado");
+            };
+            reader.readAsArrayBuffer(e.target.files[0]);
+        });
+
+        function renderizarTabla() {
+            const tbody = document.getElementById('listaPedidos');
+            const filtro = document.getElementById('filtroCiudad').value;
+            tbody.innerHTML = '';
+            let lista = (filtro === "GENERAL") ? [...pedidosEscaneadosLista].reverse() : pedidosEscaneadosLista.filter(p => (p.Localidad || "").toUpperCase().trim() === filtro).reverse();
+
+            lista.forEach((p, i) => {
+                const tr = document.createElement('tr');
+                const cEst = p.Estado.includes('ENTRE') ? 'var(--success)' : p.Estado.includes('NOVE') ? 'var(--danger)' : 'var(--warning)';
+                const cCiu = p.Localidad.includes('QUITO') ? 'var(--info)' : p.Localidad.includes('GUAYA') ? 'var(--primary)' : 'var(--primary-dark)';
+
+                tr.innerHTML = `
+                    <td>${i+1}</td>
+                    <td><b>${p.idpedido}</b></td>
+                    <td>${p.Nro_Referencia || '-'}</td>
+                    <td><span class="badge" style="background:${cEst}; color:white">${p.Estado}</span></td>
+                    <td>${p.Cliente}</td>
+                    <td><span class="badge" style="background:${cCiu}; color:white">${p.Localidad}</span></td>
+                    <td style="text-align:right"><button class="btn-action btn-del" onclick="eliminarPedido('${p.idpedido}')">Quitar</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+            document.getElementById('lblTotal').innerText = pedidosEscaneadosLista.length;
+            document.getElementById('lblVisibles').innerText = lista.length;
+        }
+
+        function cerrarSesion() {
+            sessionStorage.removeItem('sincronizado_nube');
+            localStorage.removeItem('operador_actual');
+            window.location.href = 'index.html';
+        }
+
+        // --- EL RESTO DE TUS FUNCIONES DE ESCANEO SIGUEN IGUAL ---
+        document.getElementById('scannerInput').addEventListener('input', function() {
+            clearTimeout(temporizadorEscaner);
+            temporizadorEscaner = setTimeout(() => { procesarCodigo(this.value); this.value = ''; }, 100);
+        });
+
+        function procesarCodigo(codigo, masivo = false) {
+            let clean = codigo.trim(); if (!clean) return;
+            if (clean.endsWith("-1")) clean = clean.slice(0, -2);
+            const p = monitorData.find(row => String(row.idpedido) === clean || String(row.Nro_Referencia) === clean);
+            if (p) {
+                if (memoriaPedidos.has(String(p.idpedido))) return;
+                memoriaPedidos.add(String(p.idpedido));
+                pedidosEscaneadosLista.push(p);
+                enviarAGoogleSheets(p, operadorActual, document.getElementById('lblFecha').innerText);
+                if (!masivo) renderizarTabla();
+            }
+        }
+
+        document.getElementById('btnProcesarMasivo').addEventListener('click', async function() {
+            const input = document.getElementById('bulkInput');
+            const codes = [...new Set(input.value.split(/[\n\t\s,]+/).filter(Boolean))];
+            this.disabled = true;
+            for (let c of codes) { procesarCodigo(c, true); await new Promise(r => setTimeout(resolve, 400)); }
+            renderizarTabla(); input.value = ''; this.disabled = false;
+        });
+    </script>
+</body>
+</html>

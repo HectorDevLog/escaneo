@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cargar Guías - FlexNet</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --slate-900: #0f172a; --slate-800: #1e293b; --slate-700: #334155; 
+            --slate-200: #e2e8f0; --teal-600: #0d9488; --teal-700: #0f766e; 
+        }
+
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 1350px; margin: auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow: hidden; }
+        
+        .top-navbar {
+            background-color: var(--slate-900);
+            margin: -25px -25px 25px -25px; 
+            padding: 12px 25px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .nav-brand { color: white; font-weight: 800; font-size: 1.2em; display: flex; align-items: center; gap: 8px; }
+        .nav-menu { display: flex; gap: 5px; }
+        .nav-btn { background: transparent; color: #cbd5e1; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        .nav-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+        .nav-btn.active { background: var(--teal-600); color: white; }
+
+        .header-section { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px;}
+        .header-titles h2 { margin: 0; color: var(--teal-700); }
+        .info-operador { background: #f8fafc; padding: 10px 15px; border-radius: 8px; text-align: right; font-weight: bold; border: 1px solid var(--slate-200);}
+        .info-operador span { color: var(--teal-700); }
+
+        .controls-grid { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 15px; margin-bottom: 20px; background: #f0fdfa; padding: 20px; border-radius: 8px; border: 1px solid #ccfbf1; align-items: start;}
+        
+        .label { font-weight: bold; display: block; margin-bottom: 8px; font-size: 0.9em; color: #444;}
+        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 5px; font-size: 15px; box-sizing: border-box; transition: 0.3s;}
+        input:focus, select:focus, textarea:focus { border-color: var(--teal-600); outline: none; box-shadow: 0 0 5px rgba(13, 148, 136, 0.3); }
+        
+        .destacado { border: 2px solid var(--teal-600); background-color: #f0fdfa; font-weight: bold;}
+        
+        .bulk-container { display: flex; flex-direction: column; gap: 10px; }
+        .btn-aplicar-masivo { width: 100%; padding: 12px; font-size: 1em; background-color: var(--teal-600); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; box-shadow: 0 4px 6px rgba(13, 148, 136, 0.2); }
+        .btn-aplicar-masivo:hover:not(:disabled) { background-color: var(--teal-700); transform: translateY(-2px); }
+
+        .estado-carga { grid-column: span 3; background: #e2e3e5; padding: 12px; border-radius: 5px; text-align: center; font-weight: bold; color: #383d41; border: 1px solid #d6d8db; margin-bottom: 10px;}
+        .estado-ok { background: #d4edda; color: #155724; border-color: #c3e6cb; }
+
+        .btn-group { display: flex; gap: 10px; justify-content: flex-end; margin-bottom: 10px; }
+        button.btn-accion { padding: 10px 18px; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .btn-verde { background-color: #198754; }
+        .btn-rojo { background-color: #dc3545; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85em; }
+        th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; vertical-align: middle; }
+        th { background-color: var(--slate-800); color: white; position: sticky; top: 0; }
+        tr.fila-procesada { background-color: #f0fdf4 !important; } 
+        
+        .input-guia-tabla { width: 100%; padding: 8px; border: 1px solid #aaa; border-radius: 4px; font-weight: bold; color: var(--teal-700); text-align: center; text-transform: uppercase;}
+        .input-guia-tabla:focus { border-color: var(--teal-600); background-color: #fff; }
+
+        /* Estilo para las guías que ya venían en el Excel original */
+        .guia-original { font-weight: bold; color: var(--teal-700); background: #ccfbf1; padding: 8px 12px; border-radius: 5px; display: block; border: 1px solid #99f6e4; text-align: center; }
+
+        .badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; color: white; background-color: #0d6efd;}
+        
+        .contador { text-align: right; font-weight: bold; color: var(--teal-700); margin-top: 10px; }
+
+        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { padding: 15px 20px; color: white; border-radius: 5px; font-weight: bold; animation: slideIn 0.3s forwards; }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+    </style>
+</head>
+<body>
+
+    <div id="toast-container"></div>
+
+    <div class="container">
+        
+        <div class="top-navbar">
+            <div class="nav-brand">📦 FlexNet Operaciones</div>
+            <div class="nav-menu">
+                <button class="nav-btn" onclick="window.location.href='index.html'">Módulo Distribución</button>
+                <button class="nav-btn" onclick="window.location.href='cargar_eventos.html'">Módulo Eventos</button>
+                <button class="nav-btn active">Asignar Guías</button>
+                <button class="nav-btn" onclick="window.location.href='carta_porte.html'">Carga Porte</button>
+            </div>
+        </div>
+
+        <div class="header-section">
+            <div class="header-titles">
+                <h2>🏷️ Asignación de Guías (Tracking)</h2>
+            </div>
+            <div class="info-operador">
+                <div>Operador: <span id="lblOperador">---</span></div>
+                <div style="font-size: 0.85em; margin-top: 3px;">Fecha Sistema: <span id="lblFecha">---</span></div>
+            </div>
+        </div>
+        
+        <div class="controls-grid">
+            
+            <div id="panelCarga" class="estado-carga">
+                Verificando conexión con el Módulo Principal...
+            </div>
+
+            <div>
+                <label class="label">1. Filtro de Ruta (Ciudad):</label>
+                <select id="filtroCiudad" disabled onchange="renderizarTabla()">
+                    <option value="GENERAL">TODAS (General)</option>
+                    <option value="QUITO">QUITO</option>
+                    <option value="GUAYAQUIL">GUAYAQUIL</option>
+                    <option value="CUENCA">CUENCA</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="label" style="color: var(--teal-700);">2. Prefijo de Guía (Opcional):</label>
+                <input type="text" id="inputPrefijo" class="destacado" placeholder="Ej: FCT" disabled autocomplete="off">
+                <small style="color: #666; font-size: 0.8em; margin-top: 5px; display: block;">Se unirá al inicio de los números pegados.</small>
+            </div>
+
+            <div class="bulk-container">
+                <label class="label" style="color: var(--teal-700);">3. Pegado Masivo (Números):</label>
+                <textarea id="bulkInput" rows="3" class="destacado" placeholder="Pega una columna de números desde Excel aquí..." disabled></textarea>
+                <button id="btnAplicarMasivo" class="btn-aplicar-masivo" disabled onclick="aplicarGuiasMasivas()">
+                    🚀 UNIR Y APLICAR GUÍAS A LA RUTA VISIBLE
+                </button>
+            </div>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn-accion btn-rojo" onclick="limpiarGuias()">🧹 Borrar Guías Nuevas Asignadas</button>
+            <button class="btn-accion btn-verde" onclick="generarArchivoGuias()">📥 GENERAR ARCHIVO CSV</button>
+        </div>
+
+        <div class="contador">
+            Total Pedidos: <span id="lblTotal">0</span> | Guías Listas: <span id="lblProcesados">0</span>
+        </div>
+
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>N°</th>
+                        <th>ID Pedido</th>
+                        <th>Referencia</th>
+                        <th>Ciudad</th>
+                        <th>Destinatario</th>
+                        <th style="width: 250px; text-align: center;">GUÍA (REMITO)</th>
+                    </tr>
+                </thead>
+                <tbody id="listaPedidos"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let pedidosGuiasLista = []; 
+        let operadorActual = "";
+        let fechaSistemaStr = "";
+
+        // =========================================================
+        // BUSCADOR INTELIGENTE DE COLUMNAS EXCEL
+        // =========================================================
+        function obtenerValorRemito(pedido) {
+            // Busca la columna "Nro_Remito", "Nro_ Remito", "Remito", etc.
+            for (let clave in pedido) {
+                let claveLimpia = clave.trim().toLowerCase();
+                if (claveLimpia === 'nro_remito' || claveLimpia === 'remito') {
+                    return pedido[clave] ? String(pedido[clave]).trim() : "";
+                }
+            }
+            return "";
+        }
+
+        window.onload = function() {
+            // Validar Login
+            operadorActual = localStorage.getItem('operador_actual');
+            if (!operadorActual) {
+                alert("🔒 Acceso Denegado. Inicie sesión en index.html");
+                window.location.href = 'index.html';
+                return;
+            }
+
+            document.getElementById('lblOperador').innerText = operadorActual;
+            const opciones = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            fechaSistemaStr = new Date().toLocaleDateString('es-ES', opciones).toUpperCase();
+            document.getElementById('lblFecha').innerText = fechaSistemaStr;
+
+            const cargaDistribucion = localStorage.getItem('pedidos_scan');
+            const panelCarga = document.getElementById('panelCarga');
+
+            if (cargaDistribucion && JSON.parse(cargaDistribucion).length > 0) {
+                let baseDistribucion = JSON.parse(cargaDistribucion);
+                
+                // 1. Primero evaluamos la base de distribución para saber quién trae guía de fábrica
+                pedidosGuiasLista = baseDistribucion.map(p => {
+                    let remitoOriginal = obtenerValorRemito(p);
+                    let tieneRemito = remitoOriginal !== "";
+                    return {
+                        ...p, 
+                        Guia_Asignada: tieneRemito ? remitoOriginal : "",
+                        Viene_Con_Guia: tieneRemito
+                    };
+                });
+
+                // 2. Si ya habías guardado cambios, fusionamos solo lo que llenaste a mano
+                const progresoGuias = localStorage.getItem('estado_guias_aplicadas');
+                if (progresoGuias) {
+                    let guardados = JSON.parse(progresoGuias);
+                    pedidosGuiasLista = pedidosGuiasLista.map(p => {
+                        if (!p.Viene_Con_Guia) { // Si NO viene de fábrica, buscamos si escribiste algo
+                            let pGuardado = guardados.find(g => String(g.idpedido) === String(p.idpedido));
+                            if (pGuardado && pGuardado.Guia_Asignada) {
+                                p.Guia_Asignada = pGuardado.Guia_Asignada;
+                            }
+                        }
+                        return p;
+                    });
+                }
+
+                panelCarga.classList.add('estado-ok');
+                panelCarga.innerText = `✅ Sincronización exitosa. ${pedidosGuiasLista.length} pedidos listos.`;
+                
+                ['filtroCiudad', 'inputPrefijo', 'bulkInput', 'btnAplicarMasivo'].forEach(id => document.getElementById(id).disabled = false);
+                
+                renderizarTabla();
+            } else {
+                panelCarga.innerText = `⚠️ No hay pedidos. Carga el monitor en index.html primero.`;
+            }
+        };
+
+        function mostrarNotificacion(msg, color) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.style.backgroundColor = color || '#ffc107';
+            toast.innerText = msg;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3500);
+        }
+
+        function actualizarGuiaManual(idpedido, valorInput) {
+            const index = pedidosGuiasLista.findIndex(p => String(p.idpedido) === String(idpedido));
+            if (index !== -1) {
+                pedidosGuiasLista[index].Guia_Asignada = valorInput.toUpperCase().trim();
+                localStorage.setItem('estado_guias_aplicadas', JSON.stringify(pedidosGuiasLista));
+                actualizarContadores();
+            }
+        }
+
+        function aplicarGuiasMasivas() {
+            const prefijo = document.getElementById('inputPrefijo').value.trim().toUpperCase();
+            const textoPegado = document.getElementById('bulkInput').value.trim();
+            const filtroActual = document.getElementById('filtroCiudad').value;
+
+            if (!textoPegado) return mostrarNotificacion("⚠️ DEBES PEGAR LOS NÚMEROS DE GUÍA PRIMERO", "#dc3545");
+
+            const arrayNumeros = textoPegado.split(/[\n\t\s,]+/).filter(Boolean);
+
+            let listaVisibleIndices = [];
+            pedidosGuiasLista.forEach((p, index) => {
+                const ciudadP = (p.Localidad || "").toUpperCase().trim();
+                // Solo incluimos los pedidos de esta ruta que NO traen guía de fábrica
+                if ((filtroActual === "GENERAL" || ciudadP === filtroActual) && !p.Viene_Con_Guia) {
+                    listaVisibleIndices.push(index);
+                }
+            });
+
+            if (listaVisibleIndices.length === 0) return mostrarNotificacion("⚠️ Todos los pedidos en esta ruta ya tienen guía original.", "#dc3545");
+
+            if (arrayNumeros.length > listaVisibleIndices.length) {
+                if(!confirm(`⚠️ ATENCIÓN: Pegaste ${arrayNumeros.length} guías, pero solo hay ${listaVisibleIndices.length} pedidos vacíos. Sobrarán guías. ¿Continuar?`)) return;
+            }
+
+            let asignadas = 0;
+            for (let i = 0; i < listaVisibleIndices.length; i++) {
+                if (i < arrayNumeros.length) {
+                    let idxReal = listaVisibleIndices[i];
+                    pedidosGuiasLista[idxReal].Guia_Asignada = prefijo + arrayNumeros[i].toUpperCase();
+                    asignadas++;
+                }
+            }
+
+            localStorage.setItem('estado_guias_aplicadas', JSON.stringify(pedidosGuiasLista));
+            document.getElementById('bulkInput').value = ""; 
+            
+            mostrarNotificacion(`✅ ¡ÉXITO! Se asignaron ${asignadas} guías nuevas.`, '#198754');
+            renderizarTabla();
+        }
+
+        function limpiarGuias() {
+            if (confirm("¿Borrar las guías nuevas asignadas? (Las guías originales del Excel no se borrarán).")) {
+                pedidosGuiasLista = pedidosGuiasLista.map(p => {
+                    if (!p.Viene_Con_Guia) {
+                        return { ...p, Guia_Asignada: "" }; 
+                    }
+                    return p;
+                });
+                localStorage.removeItem('estado_guias_aplicadas');
+                renderizarTabla();
+            }
+        }
+
+        function actualizarContadores() {
+            document.getElementById('lblTotal').innerText = pedidosGuiasLista.length;
+            document.getElementById('lblProcesados').innerText = pedidosGuiasLista.filter(p => p.Guia_Asignada !== "").length;
+        }
+
+        function renderizarTabla() {
+            const tbody = document.getElementById('listaPedidos');
+            const filtro = document.getElementById('filtroCiudad').value;
+            tbody.innerHTML = '';
+
+            let lista = (filtro === "GENERAL") ? pedidosGuiasLista : pedidosGuiasLista.filter(p => (p.Localidad || "").toUpperCase().trim() === filtro);
+
+            lista.forEach((p, i) => {
+                const tr = document.createElement('tr');
+                
+                if (p.Guia_Asignada !== "") tr.classList.add('fila-procesada'); 
+                
+                let celdaGuiaHTML = "";
+                
+                // Si la guía venía desde el monitor, bloqueamos la edición
+                if (p.Viene_Con_Guia) {
+                    celdaGuiaHTML = `<span class="guia-original">✔️ ${p.Guia_Asignada}</span>`;
+                } else {
+                    celdaGuiaHTML = `<input type="text" class="input-guia-tabla" placeholder="Escribir guía..." value="${p.Guia_Asignada}" oninput="actualizarGuiaManual('${p.idpedido}', this.value)">`;
+                }
+
+                tr.innerHTML = `
+                    <td>#${i+1}</td>
+                    <td><b>${p.idpedido}</b></td>
+                    <td>${p.Nro_Referencia || '-'}</td>
+                    <td><span class="badge">${p.Localidad}</span></td>
+                    <td>${p.Destinatario}</td>
+                    <td style="text-align: center;">
+                        ${celdaGuiaHTML}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            actualizarContadores();
+        }
+
+        function generarArchivoGuias() {
+            const pedidosConGuia = pedidosGuiasLista.filter(p => p.Guia_Asignada && p.Guia_Asignada.trim() !== "");
+            
+            if (pedidosConGuia.length === 0) return alert("⚠️ No hay ninguna guía asignada para exportar.");
+            
+            const cabeceras = "NRO_PEDIDO;EMPRESA;NRO_REFERENCIA;NRO_REMITO;VALOR_TOTAL_FACTURA;MONEDA_FACTURA;CANTIDAD_BULTOS_TOTAL;PESO_KG_TOTAL;VOLUMEN_M3_TOTAL;TEXTO_AUX_1;TEXTO_AUX_2;FECHA_AUX_1;FECHA_AUX_2;NRO_TRACKING_EXPRESO;NRO_TRACKING_REPRESENTANTE;FECHA_INTERFAZ;NOMBRE_REMITENTE;DIRECCION_REMITENTE;PISO_REMITENTE;DEPARTAMENTO_REMITENTE;CODIGO_POSTAL_REMITENTE;NOMBRE_DESTINATARIO;DIRECCION_DESTINATARIO;PISO_DESTINATARIO;DEPARTAMENTO_DESTINATARIO;CODIGO_POSTAL_DESTINATARIO;NRO_FACTURA;DNI_DESTINATARIO;TELEFONO_MOVIL;TELEFONO_PERSONAL;EMAIL;FECHA_COMPRA;OBSERVACIONES_INTERNAS;OBSERVACIONES_CLIENTE;TIPO_SERVICIO_OPERATIVO;TIPO_SERVICIO_ADMINISTRATIVO;HORARIO_FIJO;HORARIO_FIJO_OBS;CANALIZA_PEDIDO";
+            
+            let csvContent = "\uFEFF" + cabeceras + "\n";
+
+            pedidosConGuia.forEach(p => {
+                let empresa = (p.Cliente || "MDELIVERY").toString().replace(/;/g, "");
+                let nroRef = (p.Nro_Referencia || p.idpedido || "").toString().replace(/;/g, "");
+                let remito = (p.Guia_Asignada).toString().replace(/;/g, "");
+                
+                let columnasVaciasFinales = ";".repeat(35);
+                csvContent += `;${empresa};${nroRef};${remito}${columnasVaciasFinales}\n`;
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `Carga_Guias_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            mostrarNotificacion("✅ Archivo CSV Generado exitosamente.", "#198754");
+        }
+    </script>
+</body>
+</html>

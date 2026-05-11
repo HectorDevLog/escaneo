@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eventos Pro - FlexNet</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --slate-900: #0f172a; --slate-800: #1e293b; --slate-700: #334155; 
+            --slate-200: #e2e8f0; --morado: #6f42c1; --morado-oscuro: #59339d;
+        }
+
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 1350px; margin: auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); overflow: hidden; }
+        
+        .top-navbar {
+            background-color: var(--slate-900);
+            margin: -25px -25px 25px -25px; 
+            padding: 12px 25px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .nav-brand { color: white; font-weight: 800; font-size: 1.2em; display: flex; align-items: center; gap: 8px; }
+        .nav-menu { display: flex; gap: 5px; }
+        .nav-btn { background: transparent; color: #cbd5e1; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        .nav-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+        .nav-btn.active { background: var(--morado); color: white; }
+
+        .header-section { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px;}
+        .header-titles h2 { margin: 0; color: var(--morado); }
+        .info-operador { background: #f8fafc; padding: 10px 15px; border-radius: 8px; text-align: right; font-weight: bold; border: 1px solid var(--slate-200);}
+        .info-operador span { color: var(--morado); }
+
+        .controls-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px; background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #ddd; align-items: end;}
+        
+        .bulk-section { grid-column: span 3; display: flex; margin-top: 5px; padding-top: 15px; border-top: 1px dashed #ccc; }
+        .btn-aplicar-masivo { width: 100%; padding: 15px; font-size: 1.1em; background-color: var(--morado); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; box-shadow: 0 4px 6px rgba(111, 66, 193, 0.2); }
+        .btn-aplicar-masivo:hover:not(:disabled) { background-color: var(--morado-oscuro); transform: translateY(-2px); }
+        .btn-aplicar-masivo:disabled { background-color: #cbd5e1; cursor: not-allowed; box-shadow: none; }
+
+        .label { font-weight: bold; display: block; margin-bottom: 8px; font-size: 0.9em; color: #444;}
+        input, select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 5px; font-size: 15px; box-sizing: border-box;}
+        select.destacado, input.destacado { border: 2px solid var(--morado); background-color: #f3e8ff; font-weight: bold;}
+        
+        .fechas-rapidas { display: flex; gap: 8px; margin-bottom: 8px; }
+        .btn-quick-date { padding: 4px 10px; font-size: 0.85em; background: var(--slate-200); color: var(--slate-800); border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s;}
+        .btn-quick-date:hover:not(:disabled) { background: #d1d5db; }
+
+        .estado-carga { grid-column: span 3; background: #e2e3e5; padding: 12px; border-radius: 5px; text-align: center; font-weight: bold; color: #383d41; border: 1px solid #d6d8db; margin-bottom: 10px;}
+        .estado-ok { background: #d4edda; color: #155724; border-color: #c3e6cb; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85em; }
+        th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background-color: var(--slate-800); color: white; position: sticky; top: 0; }
+        tr.fila-procesada { background-color: #f0fdf4 !important; } 
+        
+        .badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; color: white; }
+        .badge-evento { background-color: var(--morado); border: 1px solid var(--morado-oscuro); font-size: 0.85em;}
+        .badge-pendiente { background-color: #f8f9fa; color: #adb5bd; border: 1px dashed #ced4da; }
+        
+        .contador { text-align: right; font-weight: bold; color: var(--morado); margin-top: 10px; }
+
+        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { padding: 15px 20px; color: white; border-radius: 5px; font-weight: bold; animation: slideIn 0.3s forwards; }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+    </style>
+</head>
+<body>
+
+    <div id="toast-container"></div>
+
+    <div class="container">
+        
+        <div class="top-navbar">
+            <div class="nav-brand">📦 FlexNet Operaciones</div>
+            <div class="nav-menu">
+                <button class="nav-btn" onclick="window.location.href='escaneo.html'">Módulo Distribución</button>
+                <button class="nav-btn active">Módulo Eventos</button>
+                <button class="nav-btn" onclick="window.location.href='cargar_guias.html'">Asignar Guias</button>
+                <button class="nav-btn" onclick="window.location.href='carta_porte.html'">Carta</button>
+            </div>
+        </div>
+
+        <div class="header-section">
+            <div class="header-titles">
+                <h2>📝 Asignación Masiva de Eventos</h2>
+            </div>
+            <div class="info-operador">
+                <div>Operador: <span id="lblOperador">---</span></div>
+                <div style="font-size: 0.85em; margin-top: 3px;">Fecha Sistema: <span id="lblFecha">---</span></div>
+            </div>
+        </div>
+        
+        <div class="controls-grid">
+            
+            <div id="panelCarga" class="estado-carga">
+                Verificando conexión...
+            </div>
+
+            <div>
+                <label class="label">1. Filtro de Ruta (Ciudad):</label>
+                <select id="filtroCiudad" disabled onchange="renderizarTabla()">
+                    <option value="GENERAL">TODAS (General)</option>
+                    <option value="QUITO">QUITO</option>
+                    <option value="GUAYAQUIL">GUAYAQUIL</option>
+                    <option value="CUENCA">CUENCA</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="label" style="color: var(--morado);">2. Seleccionar Evento:</label>
+                <select id="selectEvento" class="destacado" disabled>
+                    <option value="" disabled selected>-- Elegir un Evento --</option>
+                    <option value="PEDIDO_EN_PROCESO">PEDIDO_EN_PROCESO</option>
+                    <option value="FECHA_ESTIMADA_ENTREGA">FECHA_ESTIMADA_ENTREGA</option>
+                    <option value="HABILITADO_RUTEO">HABILITADO_RUTEO</option>
+                    <option value="PEDIDO_EN_TRANSITO">PEDIDO_EN_TRANSITO</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="label" style="color: var(--morado);">3. Seleccionar Fecha:</label>
+                <div class="fechas-rapidas">
+                    <button class="btn-quick-date" id="btnHoy" onclick="setFechaRapida('hoy')" disabled>Hoy</button>
+                    <button class="btn-quick-date" id="btnManana" onclick="setFechaRapida('manana')" disabled>Mañana</button>
+                </div>
+                <input type="date" id="inputFechaEvento" class="destacado" disabled>
+            </div>
+            
+            <div class="bulk-section">
+                <button id="btnAplicarMasivo" class="btn-aplicar-masivo" disabled onclick="aplicarEventoMasivo()">
+                    🚀 APLICAR Y DESCARGAR CSV PARA CARGA
+                </button>
+            </div>
+        </div>
+
+        <div class="contador">
+            Total en carga: <span id="lblTotal">0</span> | Actualizados: <span id="lblProcesados">0</span>
+        </div>
+
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>N°</th>
+                        <th>ID Pedido</th>
+                        <th>Estado Actual</th>
+                        <th>NUEVO EVENTO</th>
+                        <th>FECHA ASIGNADA</th>
+                        <th>Cliente</th>
+                        <th>Destinatario</th>
+                        <th>Ciudad</th>
+                    </tr>
+                </thead>
+                <tbody id="listaPedidos"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="configuracion_nube.js"></script>
+
+    <script>
+        let pedidosEventosLista = []; 
+        let operadorActual = "";
+        let fechaSistemaStr = "";
+
+        window.onload = function() {
+            operadorActual = localStorage.getItem('operador_actual');
+            if (!operadorActual) {
+                alert("🔒 Acceso Denegado.");
+                window.location.href = 'index.html';
+                return;
+            }
+
+            document.getElementById('lblOperador').innerText = operadorActual;
+            const opciones = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            fechaSistemaStr = new Date().toLocaleDateString('es-ES', opciones).toUpperCase();
+            document.getElementById('lblFecha').innerText = fechaSistemaStr;
+
+            setFechaRapida('hoy');
+
+            const cargaDistribucion = localStorage.getItem('pedidos_scan');
+            if (cargaDistribucion) {
+                pedidosEventosLista = JSON.parse(cargaDistribucion).map(p => ({
+                    ...p, Nuevo_Evento_Aplicado: "", Fecha_Evento_Aplicado: ""
+                }));
+
+                document.getElementById('panelCarga').classList.add('estado-ok');
+                document.getElementById('panelCarga').innerText = `✅ Base sincronizada con ${pedidosEventosLista.length} pedidos.`;
+                ['filtroCiudad', 'selectEvento', 'inputFechaEvento', 'btnAplicarMasivo', 'btnHoy', 'btnManana'].forEach(id => document.getElementById(id).disabled = false);
+                renderizarTabla();
+            }
+        };
+
+        function setFechaRapida(tipo) {
+            let d = new Date();
+            if (tipo === 'manana') d.setDate(d.getDate() + 1);
+            const offset = d.getTimezoneOffset() * 60000;
+            const fechaLocal = (new Date(d - offset)).toISOString().split('T')[0];
+            document.getElementById('inputFechaEvento').value = fechaLocal;
+        }
+
+        function aplicarEventoMasivo() {
+            const evento = document.getElementById('selectEvento').value;
+            const fecha = document.getElementById('inputFechaEvento').value;
+            const filtro = document.getElementById('filtroCiudad').value;
+
+            if (!evento || !fecha) return alert("Selecciona Evento y Fecha.");
+
+            let procesadosCSV = [];
+            pedidosEventosLista.forEach(p => {
+                const ciudadP = (p.Localidad || "").toUpperCase().trim();
+                if (filtro === "GENERAL" || ciudadP === filtro) {
+                    p.Nuevo_Evento_Aplicado = evento;
+                    p.Fecha_Evento_Aplicado = fecha;
+                    procesadosCSV.push(p);
+
+                    if (typeof enviarAGoogleSheets === "function") {
+                        let pNube = {...p, Estado: evento};
+                        enviarAGoogleSheets(pNube, operadorActual, fecha);
+                    }
+                }
+            });
+
+            if (procesadosCSV.length > 0) {
+                renderizarTabla();
+                descargarCSV(procesadosCSV, evento, fecha);
+                const container = document.getElementById('toast-container');
+                const toast = document.createElement('div');
+                toast.className = 'toast';
+                toast.style.backgroundColor = '#198754';
+                toast.innerText = `✅ CSV Generado con ${procesadosCSV.length} pedidos.`;
+                container.appendChild(toast);
+                setTimeout(() => toast.remove(), 3500);
+            }
+        }
+
+        // =========================================================
+        // GENERADOR DEL CSV REPARADO (Punto y Coma y Cabeceras)
+        // =========================================================
+        function descargarCSV(datos, evento, fechaYYYYMMDD) {
+            
+            // 1. Formateamos la fecha a DD/MM/YYYY para que sea compatible
+            let [y, m, d] = fechaYYYYMMDD.split('-');
+            let fechaDDMMYYYY = `${d}/${m}/${y}`;
+
+            // 2. Usamos punto y coma (;) como separador para que Excel lo abra perfecto
+            // Agregamos \uFEFF al inicio (BOM) para asegurarnos de que se reconozcan tildes y caracteres especiales
+            let csvContent = "\uFEFFEMPRESA;NRO_REFERENCIA;CODIGO_EVENTO;FECHA_HORA_EVENTO;CONFORMANTE;MOTIVO;OBSERVACION\n";
+            
+            datos.forEach(p => {
+                // Sacamos la empresa (Cliente) y la Referencia (si no hay Referencia usa el idpedido)
+                let empresa = (p.Cliente || "MDELIVERY").toString().replace(/;/g, "");
+                let nroRef = (p.Nro_Referencia || p.idpedido || "").toString().replace(/;/g, "");
+                
+                // Las últimas 3 celdas (Conformante, Motivo, Obs) van vacías como en el ejemplo (;;;)
+                csvContent += `${empresa};${nroRef};${evento};${fechaDDMMYYYY};;;\n`;
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `Carga_Eventos_${evento}_${fechaYYYYMMDD}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function renderizarTabla() {
+            const tbody = document.getElementById('listaPedidos');
+            const filtro = document.getElementById('filtroCiudad').value;
+            tbody.innerHTML = '';
+
+            let lista = (filtro === "GENERAL") ? pedidosEventosLista : pedidosEventosLista.filter(p => (p.Localidad || "").toUpperCase().trim() === filtro);
+
+            lista.forEach((p, i) => {
+                const tr = document.createElement('tr');
+                let celdaEvento = `<span class="badge badge-pendiente">Pendiente</span>`;
+                let celdaFecha = `-`;
+                
+                if (p.Nuevo_Evento_Aplicado !== "") {
+                    celdaEvento = `<span class="badge badge-evento">${p.Nuevo_Evento_Aplicado}</span>`;
+                    celdaFecha = `<strong>${p.Fecha_Evento_Aplicado}</strong>`;
+                    tr.classList.add('fila-procesada'); 
+                }
+
+                tr.innerHTML = `
+                    <td>#${i+1}</td>
+                    <td><b>${p.idpedido}</b></td>
+                    <td><span class="badge" style="background:#6c757d">${p.Estado || '-'}</span></td>
+                    <td>${celdaEvento}</td>
+                    <td>${celdaFecha}</td>
+                    <td>${p.Cliente}</td>
+                    <td>${p.Destinatario}</td>
+                    <td><span class="badge" style="background:#0d6efd">${p.Localidad}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            document.getElementById('lblTotal').innerText = pedidosEventosLista.length;
+            document.getElementById('lblProcesados').innerText = pedidosEventosLista.filter(p => p.Nuevo_Evento_Aplicado !== "").length;
+        }
+    </script>
+</body>
+</html>

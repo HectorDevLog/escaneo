@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carta Porte Pro - FlexNet</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --slate-900: #0f172a; --slate-800: #1e293b; --slate-700: #334155; 
+            --slate-200: #e2e8f0; --naranja: #f59e0b; --naranja-oscuro: #d97706;
+        }
+
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 1300px; margin: auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        
+        .top-navbar {
+            background-color: var(--slate-900);
+            margin: -25px -25px 25px -25px; 
+            padding: 12px 25px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .nav-brand { color: white; font-weight: 800; font-size: 1.2em; display: flex; align-items: center; gap: 8px; }
+        .nav-menu { display: flex; gap: 5px; }
+        .nav-btn { background: transparent; color: #cbd5e1; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        .nav-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+        .nav-btn.active { background: var(--naranja); color: white; }
+
+        .header-section { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;}
+        .header-titles h2 { margin: 0; color: #000; text-transform: uppercase; }
+
+        .dispatch-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px; background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .label { font-weight: bold; display: block; margin-bottom: 8px; font-size: 0.85em; color: #555; text-transform: uppercase;}
+        select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; font-weight: bold; background: white;}
+        
+        .btn-group-actions { grid-column: span 4; display: flex; gap: 10px; margin-top: 10px; }
+        .btn-main { flex: 1; padding: 15px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1em; transition: 0.3s; color: white; }
+        .btn-print { background-color: var(--slate-900); }
+        .btn-excel { background-color: #198754; }
+        .btn-main:hover { transform: translateY(-2px); opacity: 0.9; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.85em; }
+        th, td { padding: 10px; border: 1px solid #333; text-align: left; }
+        th { background-color: #f1f5f9; color: #000; text-transform: uppercase; }
+        
+        .resumen-final { margin-top: 20px; padding: 20px; border: 1px solid #333; display: flex; justify-content: space-between; align-items: center; font-weight: bold;}
+        .firma-box { border-top: 1px solid #000; width: 200px; text-align: center; margin-top: 40px; padding-top: 5px; }
+
+        @media print {
+            @page { size: landscape; margin: 1cm; }
+            .top-navbar, .dispatch-grid, .btn-group-actions { display: none !important; }
+            body { background: white; padding: 0; }
+            .container { box-shadow: none; border: none; width: 100%; max-width: 100%; padding: 0;}
+            th { background-color: #eee !important; -webkit-print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="top-navbar">
+            <div class="nav-brand">📦 FlexNet Operaciones</div>
+            <div class="nav-menu">
+                <button class="nav-btn" onclick="window.location.href='index.html'">Distribución</button>
+                <button class="nav-btn" onclick="window.location.href='cargar_eventos.html'">Eventos</button>
+                <button class="nav-btn" onclick="window.location.href='cargar_guias.html'">Guías</button>
+                <button class="nav-btn active">Carta Porte</button>
+            </div>
+        </div>
+
+        <div class="header-section">
+            <div class="header-titles">
+                <h2>Hoja de Ruta / Manifiesto de Carga</h2>
+                <div style="font-size: 0.9em; font-weight: bold; color: #666;">FLEXNET LOGISTICS S.A.S</div>
+            </div>
+            <div class="info-operador">
+                <div id="displayOperador">Despachador: ---</div>
+                <div id="displayFecha">Fecha: ---</div>
+            </div>
+        </div>
+
+        <div class="dispatch-grid">
+            <div>
+                <label class="label">1. Ruta / Ciudad:</label>
+                <select id="filtroCiudad" onchange="actualizarVista()">
+                    <option value="GENERAL">TODAS LAS CIUDADES</option>
+                    <option value="QUITO">QUITO</option>
+                    <option value="GUAYAQUIL">GUAYAQUIL</option>
+                    <option value="CUENCA">CUENCA</option>
+                </select>
+            </div>
+            <div>
+                <label class="label">2. Chofer:</label>
+                <select id="selectConductor" onchange="autoCompletarPlaca()">
+                    <option value="" disabled selected>Seleccione Chofer...</option>
+                    <option value="ALEXIS CASTILLO">ALEXIS CASTILLO</option>
+                    <option value="CARLOS DOICELA">CARLOS DOICELA</option>
+                    <option value="DARWIN QUINATOA">DARWIN QUINATOA</option>
+                    <option value="DIEGO ARCOS">DIEGO ARCOS</option>
+                    <option value="EDISON LOPEZ">EDISON LOPEZ</option>
+                    <option value="EDWIN CHANCUSIGT">EDWIN CHANCUSIGT</option>
+                    <option value="ERNESTO PILCO">ERNESTO PILCO</option>
+                    <option value="FERNANDO VALLES">FERNANDO VALLES</option>
+                    <option value="FRANCISCO TIPAN">FRANCISCO TIPAN</option>
+                    <option value="JIMMY BURGOS">JIMMY BURGOS</option>
+                    <option value="LUIS PEÑARRIETA">LUIS PEÑARRIETA</option>
+                    <option value="PABLO ANDRADE">PABLO ANDRADE</option>
+                    <option value="ROMEL LOPEZ">ROMEL LOPEZ</option>
+                    <option value="STALIN ANUAL">STALIN ANUAL</option>
+                    <option value="WILFRIDO JIMENEZ">WILFRIDO JIMENEZ</option>
+                    <option value="XAVIER MONGON">XAVIER MONGON</option>
+                </select>
+            </div>
+            <div>
+                <label class="label">3. Placa del Vehículo:</label>
+                <select id="selectPlaca">
+                    <option value="" disabled selected>Seleccione Placa...</option>
+                </select>
+            </div>
+            <div class="btn-group-actions">
+                <button class="btn-main btn-print" onclick="window.print()">🖨️ IMPRIMIR DOCUMENTO</button>
+                <button class="btn-main btn-excel" onclick="generarExcelRuta()">📥 GENERAR EXCEL PARA RUTA</button>
+            </div>
+        </div>
+
+        <table id="tablaImpresion">
+            <thead>
+                <tr>
+                    <th style="width: 30px;">N°</th>
+                    <th style="width: 80px;">ID Pedido</th>
+                    <th style="width: 100px;">Ref / Remito</th>
+                    <th>Destinatario / Cliente</th>
+                    <th style="width: 250px;">Dirección de Entrega</th>
+                    <th style="width: 90px;">Ciudad</th>
+                    <th style="width: 120px;">Firma / Observación</th>
+                </tr>
+            </thead>
+            <tbody id="tablaCuerpo"></tbody>
+        </table>
+
+        <div class="resumen-final">
+            <div>
+                Total Bultos: <span id="totalPedidos">0</span><br>
+                Ruta Destino: <span id="rutaSeleccionada">GENERAL</span>
+            </div>
+            <div class="firma-box">Firma Chofer</div>
+            <div class="firma-box">Firma Despacho</div>
+        </div>
+    </div>
+
+    <script>
+        let pedidosBase = [];
+        const mappingChoferes = {
+            "ALEXIS CASTILLO": "PBQ5405", "CARLOS DOICELA": "PBC4292", "DARWIN QUINATOA": "PCT7959",
+            "DIEGO ARCOS": "TBD4214", "EDISON LOPEZ": "PQC0009", "EDWIN CHANCUSIGT": "PZR0129",
+            "ERNESTO PILCO": "JAA2355", "FERNANDO VALLES": "PBE1609", "FRANCISCO TIPAN": "PAB5659",
+            "JIMMY BURGOS": "CPL-831", "LUIS PEÑARRIETA": "", "PABLO ANDRADE": "",
+            "ROMEL LOPEZ": "", "STALIN ANUAL": "", "WILFRIDO JIMENEZ": "",
+            "XAVIER MONGON": ""
+        };
+
+        window.onload = function() {
+            const selectPlaca = document.getElementById('selectPlaca');
+            const placasUnicas = [...new Set(Object.values(mappingChoferes).filter(p => p !== ""))];
+            placasUnicas.forEach(placa => {
+                let opt = document.createElement('option');
+                opt.value = placa; opt.textContent = placa;
+                selectPlaca.appendChild(opt);
+            });
+
+            const operador = localStorage.getItem('operador_actual') || 'S/D';
+            document.getElementById('displayOperador').innerText = "Despachador: " + operador;
+            document.getElementById('displayFecha').innerText = "Fecha: " + new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase();
+
+            const datos = localStorage.getItem('pedidos_scan');
+            if (datos) {
+                pedidosBase = JSON.parse(datos);
+                actualizarVista();
+            }
+        };
+
+        function autoCompletarPlaca() {
+            const chofer = document.getElementById('selectConductor').value;
+            const placa = mappingChoferes[chofer];
+            if(placa) document.getElementById('selectPlaca').value = placa;
+        }
+
+        function actualizarVista() {
+            const filtro = document.getElementById('filtroCiudad').value;
+            const tbody = document.getElementById('tablaCuerpo');
+            tbody.innerHTML = "";
+            let filtrados = (filtro === "GENERAL") ? pedidosBase : pedidosBase.filter(p => (p.Localidad || "").toUpperCase().trim() === filtro);
+
+            filtrados.forEach((p, i) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${i + 1}</td>
+                    <td><b>${p.idpedido}</b></td>
+                    <td>${(p.Nro_Referencia || '-') + " / " + (p.Nro_Remito || '-')}</td>
+                    <td><b>${p.Destinatario || '-'}</b><br><small>${p.Cliente || '-'}</small></td>
+                    <td style="font-size: 0.9em;">${p.direccion || 'S/D'}</td>
+                    <td>${p.Localidad}</td>
+                    <td></td>
+                `;
+                tbody.appendChild(tr);
+            });
+            document.getElementById('totalPedidos').innerText = filtrados.length;
+            document.getElementById('rutaSeleccionada').innerText = filtro;
+        }
+
+        function generarExcelRuta() {
+            const conductor = document.getElementById('selectConductor').value;
+            const vehiculo = document.getElementById('selectPlaca').value;
+            const filtro = document.getElementById('filtroCiudad').value;
+
+            if (!conductor || !vehiculo) return alert("Seleccione Chofer y Placa primero.");
+
+            let filtrados = (filtro === "GENERAL") ? pedidosBase : pedidosBase.filter(p => (p.Localidad || "").toUpperCase().trim() === filtro);
+            if (filtrados.length === 0) return alert("No hay pedidos para exportar.");
+
+            let csvContent = "\uFEFFConductor;Vehículo;Índice de ruta;Parada;Título;Dirección;Tiempo de servicio;Tiempo estimado de llegada;Distancia;Carga;Carga total;Latitud;Longitud;Id de pedido;Advertencias;Capacidad 2;Capacidad 3;Comentario de la ruta;Notas;Zonas\n";
+            
+            // 1. INICIO
+            csvContent += `${conductor};${vehiculo};1;0;Inicio;FLEXNET;;;;;;;;;;;;;;;\n`;
+
+            // 2. PEDIDOS (Formato: Cliente,IDPEDIDO)
+            filtrados.forEach((p, i) => {
+                let id = p.idpedido || "";
+                let cliente = p.Cliente || "S/C";
+                let titulo = `"${cliente},${id}"`; 
+                let direccion = `"${(p.direccion || "").replace(/"/g, '""')}"`;
+                csvContent += `${conductor};${vehiculo};1;${i+1};${titulo};${direccion};;;;;;;;${id};;;;;;;\n`;
+            });
+
+            // 3. FIN (NUEVO)
+            csvContent += `${conductor};${vehiculo};1;${filtrados.length + 1};Fin;FLEXNET;;;;;;;;;;;;;;;\n`;
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `Ruta_${conductor}_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+        }
+    </script>
+</body>
+</html>
