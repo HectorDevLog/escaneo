@@ -33,7 +33,8 @@
         }
         .nav-link:hover { background: rgba(255,255,255,0.05); color: white; }
         .nav-link.active { background: var(--primary); color: white; }
-        .btn-logout { margin-top: auto; background: #334155; color: #f8fafc; text-align: center; cursor: pointer; padding: 10px; border-radius: 8px; }
+        .btn-logout { margin-top: auto; background: #334155; color: #f8fafc; text-align: center; cursor: pointer; padding: 10px; border-radius: 8px; border: none; font-weight: 600;}
+        .btn-logout:hover { background: rgba(255,255,255,0.2); }
 
         /* MAIN CONTENT */
         .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; }
@@ -73,7 +74,7 @@
         .btn-action { padding: 8px 12px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; font-size: 0.8rem; transition: 0.2s; }
         .btn-del { background: #fee2e2; color: #b91c1c; }
         .btn-del:hover { background: #ef4444; color: white; }
-        .btn-primary { background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .btn-primary { background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.3s;}
         .btn-primary:disabled { background: #cbd5e1; cursor: not-allowed; }
 
         /* NOTIFICATIONS */
@@ -81,8 +82,24 @@
         .toast { background: var(--sidebar); color: white; padding: 16px 24px; border-radius: 10px; margin-top: 10px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2); animation: slideIn 0.3s ease-out; }
         @keyframes slideIn { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-        .stats { display: flex; gap: 20px; margin-top: 10px; }
+        .stats { display: flex; gap: 20px; margin-top: 10px; align-items: center; }
         .stat-val { font-weight: 800; color: var(--primary); }
+        
+        #lblSincronizando {
+            background-color: var(--warning);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            display: none; 
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
     </style>
 </head>
 <body>
@@ -95,7 +112,7 @@
             <a href="cargar_guias.html" class="nav-link">Asignar Guías</a>
             <a href="carta_porte.html" class="nav-link">Carta Porte</a>
         </nav>
-        <div class="btn-logout" onclick="cerrarSesion()">Cerrar Sesión</div>
+        <button class="btn-logout" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
 
     <div class="main-content">
@@ -105,6 +122,7 @@
                 <div class="stats">
                     <span>Total hoy: <span class="stat-val" id="lblTotal">0</span></span>
                     <span>Mostrando: <span class="stat-val" id="lblVisibles">0</span></span>
+                    <span id="lblSincronizando">⚡ Sincronizando: <span id="lblSyncCount">0</span> pedidos</span>
                 </div>
             </div>
             <div class="user-pill">
@@ -172,17 +190,88 @@
         let memoriaPedidos = new Set(); 
         let operadorActual = "";
 
-        // 🌟 FUNCIÓN CLAVE ACTUALIZADA: Usa localForage (IndexedDB) para no tener límite de tamaño
+        // 🚀 NUEVO MOTOR DE ENVÍO MASIVO
+        let colaEnvioNube = [];
+        let guardandoEnFondo = false;
+
+        async function enviarMasivoAGoogleSheets(lotePedidos) {
+            const opcionesFecha = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const fechaLarga = new Date().toLocaleDateString('es-ES', opcionesFecha).toUpperCase();
+
+            // Preparamos el paquete con TODOS los pedidos del lote
+            const payload = {
+                action: 'guardar_masivo',
+                pedidos: lotePedidos.map(p => ({
+                    fecha: fechaLarga,
+                    usuario: operadorActual,
+                    idpedido: p.idpedido,
+                    referencia: p.Nro_Referencia,
+                    estado: p.Estado,
+                    ciudad: p.Localidad
+                }))
+            };
+
+            await fetch(GOOGLE_SHEET_URL, {
+                method: 'POST',
+                mode: 'no-cors', // Evita bloqueos CORS del navegador
+                body: JSON.stringify(payload)
+            });
+        }
+
+        async function enviarAGoogleSheets(p) {
+            // Envío clásico de 1 solo pedido
+            const payload = {
+                fecha: new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase(),
+                usuario: operadorActual,
+                idpedido: p.idpedido,
+                referencia: p.Nro_Referencia,
+                estado: p.Estado,
+                ciudad: p.Localidad
+            };
+            await fetch(GOOGLE_SHEET_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify(payload)
+            });
+        }
+
+        async function procesarColaEnvio() {
+            if (guardandoEnFondo || colaEnvioNube.length === 0) return;
+            guardandoEnFondo = true;
+            document.getElementById('lblSincronizando').style.display = 'inline-block';
+            
+            while (colaEnvioNube.length > 0) {
+                document.getElementById('lblSyncCount').innerText = colaEnvioNube.length;
+                
+                // 📦 TOMAMOS TODOS LOS PEDIDOS QUE ESTÉN EN LA FILA DE GOLPE
+                let lote = colaEnvioNube.splice(0, colaEnvioNube.length); 
+                
+                try {
+                    if (lote.length === 1) {
+                        await enviarAGoogleSheets(lote[0]); // Si es 1, envío normal
+                    } else {
+                        await enviarMasivoAGoogleSheets(lote); // Si son varios, envío en bloque ultra rápido
+                    }
+                } catch(e) {
+                    console.error("Fallo de red, reintentando paquete...", e);
+                    colaEnvioNube.unshift(...lote); // Devuelve los pedidos a la fila si falla el internet
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+            }
+            
+            guardandoEnFondo = false;
+            document.getElementById('lblSincronizando').style.display = 'none';
+        }
+
         async function guardarEstadoLocal() {
             try {
                 await localforage.setItem('monitorData_flexnet', monitorData);
                 await localforage.setItem('pedidosEscaneados_flexnet', pedidosEscaneadosLista);
             } catch (e) {
-                console.error("Error guardando en memoria de base de datos local.", e);
+                console.error("Error guardando localmente.", e);
             }
         }
 
-        // AL CARGAR LA PÁGINA
         window.onload = async function() {
             operadorActual = localStorage.getItem('operador_actual');
             if (!operadorActual) { window.location.href = 'index.html'; return; }
@@ -190,7 +279,6 @@
             document.getElementById('lblOperador').innerText = operadorActual;
             document.getElementById('lblFecha').innerText = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' }).toUpperCase();
 
-            // 🌟 RESTAURAR SESIÓN AL VOLVER DE OTRA PESTAÑA (Soporta archivos gigantes)
             try {
                 const savedMonitor = await localforage.getItem('monitorData_flexnet');
                 const savedPedidos = await localforage.getItem('pedidosEscaneados_flexnet');
@@ -198,10 +286,7 @@
                 if (savedMonitor && savedMonitor.length > 0) {
                     monitorData = savedMonitor;
                     
-                    // Activamos la interfaz
                     ['filtroCiudad', 'scannerInput', 'bulkInput', 'btnProcesarMasivo'].forEach(id => document.getElementById(id).disabled = false);
-                    
-                    // Indicador de que el monitor está vivo
                     document.getElementById('fileLabel').innerHTML = "✅ Monitor Activo en Memoria";
                     document.getElementById('fileLabel').style.color = "var(--success)";
                     
@@ -210,22 +295,18 @@
                         pedidosEscaneadosLista.forEach(p => memoriaPedidos.add(String(p.idpedido)));
                     }
                     renderizarTabla();
-                    mostrarNotificacion("✅ Monitor restaurado de la memoria. Puedes continuar.");
                 }
             } catch (e) {
-                console.error("No se pudo restaurar la memoria:", e);
                 localforage.clear();
             }
         };
 
-        // AL CARGAR UN NUEVO MONITOR EXCEL
         document.getElementById('fileUpload').addEventListener('change', function(e) {
             const reader = new FileReader();
             reader.onload = async (e) => {
                 const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
                 const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
                 
-                // Extraemos solo lo necesario para mayor rapidez (Agregamos Nro_Remito)
                 monitorData = rawData.map(row => ({
                     idpedido: String(row.idpedido || ''),
                     Nro_Referencia: String(row.Nro_Referencia || row.Referencia || '-'),
@@ -233,7 +314,7 @@
                     Cliente: String(row.Cliente || 'S/C'),
                     Direccion: String(row.direccion || row.Direccion || row.DIRECCION || '---'),
                     Localidad: String(row.Localidad || row.Ciudad || 'GENERAL'),
-                    Nro_Remito: String(row.Nro_Remito || row.Remito || '') // <-- AGREGADO AQUÍ
+                    Nro_Remito: String(row.Nro_Remito || row.Remito || '') 
                 })).filter(row => row.idpedido !== ''); 
                 
                 ['filtroCiudad', 'scannerInput', 'bulkInput', 'btnProcesarMasivo'].forEach(id => document.getElementById(id).disabled = false);
@@ -250,7 +331,6 @@
             reader.readAsArrayBuffer(e.target.files[0]);
         });
 
-        // FUNCIÓN DE SINCRONIZACIÓN
         async function sincronizarConNube() {
             try {
                 const urlFinal = `${GOOGLE_SHEET_URL}?operacion=consultar_carga&operador=${encodeURIComponent(operadorActual)}`;
@@ -287,19 +367,17 @@
                                 Cliente: infoExcel ? infoExcel.Cliente : 'S/C',
                                 Direccion: infoExcel ? infoExcel.Direccion : '---',
                                 Localidad: infoExcel ? infoExcel.Localidad : (p.ciudad || 'GENERAL'),
-                                Nro_Remito: infoExcel ? infoExcel.Nro_Remito : '' // <-- AGREGADO AQUÍ
+                                Nro_Remito: infoExcel ? infoExcel.Nro_Remito : '' 
                             });
                             recuperados++;
                         }
                     });
 
                     renderizarTabla();
-                    await guardarEstadoLocal(); // Guardamos el estado masivo
+                    await guardarEstadoLocal(); 
 
                     if (recuperados > 0) {
                         mostrarNotificacion(`✅ Se restauraron ${recuperados} pedidos escaneados HOY`);
-                    } else {
-                        mostrarNotificacion("ℹ️ No tienes escaneos previos registrados para el día de hoy.");
                     }
                 }
             } catch (e) {
@@ -307,15 +385,16 @@
             }
         }
 
-        // PROCESAR CÓDIGO (INDIVIDUAL Y MASIVO)
-        async function procesarCodigo(codigo, masivo = false) {
+        // PROCESAMIENTO
+        function procesarCodigo(codigo, masivo = false) {
             let clean = String(codigo).trim(); 
-            if (!clean) return;
+            if (!clean) return false;
+            
             if (clean.endsWith("-1")) clean = clean.slice(0, -2);
 
             if (memoriaPedidos.has(clean)) {
-                mostrarNotificacion(`⚠️ El pedido ${clean} ya se escaneó hoy`, "#f59e0b");
-                return;
+                if(!masivo) mostrarNotificacion(`⚠️ El pedido ${clean} ya se escaneó hoy`, "#f59e0b");
+                return false;
             }
 
             const info = monitorData.find(row => row.idpedido === clean || row.Nro_Referencia === clean);
@@ -325,8 +404,8 @@
                 const ciudadPaquete = String(info.Localidad || 'GENERAL').toUpperCase().trim();
 
                 if (filtroActual !== "GENERAL" && ciudadPaquete !== filtroActual) {
-                    mostrarNotificacion(`🚫 Bloqueado: ID ${clean} es de ${ciudadPaquete}`, "#ef4444");
-                    return; 
+                    if(!masivo) mostrarNotificacion(`🚫 Bloqueado: ID ${clean} es de ${ciudadPaquete}`, "#ef4444");
+                    return false; 
                 }
 
                 memoriaPedidos.add(String(info.idpedido));
@@ -338,45 +417,25 @@
                     Cliente: info.Cliente,
                     Direccion: info.Direccion,
                     Localidad: ciudadPaquete,
-                    Nro_Remito: info.Nro_Remito // <-- AGREGADO AQUÍ
+                    Nro_Remito: info.Nro_Remito
                 };
                 
+                // Muestra en tabla al INSTANTE
                 pedidosEscaneadosLista.push(nuevoPedido);
-                guardarEstadoLocal(); // Se ejecuta en segundo plano
+                guardarEstadoLocal(); 
                 
-                await enviarAGoogleSheets(nuevoPedido);
+                // Metemos a la fila de espera
+                colaEnvioNube.push(nuevoPedido);
+                procesarColaEnvio(); // Inicia motor de fondo
                 
                 if (!masivo) {
                     renderizarTabla();
                     mostrarNotificacion(`✅ Pedido ${info.idpedido} registrado`);
                 }
+                return true;
             } else {
-                mostrarNotificacion(`❌ ID ${clean} no se encuentra en el Monitor`, "#ef4444");
-            }
-        }
-
-        // ENVÍO DE DATOS A GOOGLE SHEETS
-        async function enviarAGoogleSheets(p) {
-            try {
-                const opcionesFecha = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-                const fechaLarga = new Date().toLocaleDateString('es-ES', opcionesFecha).toUpperCase();
-
-                const payload = {
-                    fecha: fechaLarga,
-                    usuario: operadorActual,
-                    idpedido: p.idpedido,
-                    referencia: p.Nro_Referencia,
-                    estado: p.Estado,
-                    ciudad: p.Localidad
-                };
-
-                fetch(GOOGLE_SHEET_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    body: JSON.stringify(payload)
-                });
-            } catch (e) { 
-                console.error("Error envío Sheets:", e); 
+                if(!masivo) mostrarNotificacion(`❌ ID ${clean} no se encuentra en el Monitor`, "#ef4444");
+                return false;
             }
         }
 
@@ -391,7 +450,6 @@
             return '#64748b'; 
         }
 
-        // RENDERIZADO DE TABLA EN PANTALLA
         function renderizarTabla() {
             const tbody = document.getElementById('listaPedidos');
             const filtro = document.getElementById('filtroCiudad').value;
@@ -426,7 +484,6 @@
             document.getElementById('lblVisibles').innerText = filtrados.length;
         }
 
-        // ELIMINAR PEDIDO DE LA NUBE
         async function eliminarPedido(id) {
             if (!confirm(`¿Estás seguro de eliminar el pedido ${id} de tu lista de hoy?`)) return;
             
@@ -442,15 +499,13 @@
                     method: 'POST',
                     mode: 'no-cors',
                     body: JSON.stringify({ action: 'eliminar_pedido', idpedido: id })
-                }).then(() => {
-                    mostrarNotificacion("☁️ Borrado confirmado en la nube", "var(--success)");
                 });
             } catch (e) { 
                 mostrarNotificacion("Error al intentar comunicarse con la nube.", "#ef4444"); 
             }
         }
 
-        // --- INPUTS Y EVENTOS AUTOMÁTICOS ---
+        // --- INPUTS Y EVENTOS ---
         document.getElementById('scannerInput').addEventListener('input', function(e) {
             let val = this.value.trim();
             if (/^\d{7}$/.test(val) || val.endsWith('-1')) {
@@ -466,23 +521,28 @@
             }
         });
 
-        document.getElementById('btnProcesarMasivo').addEventListener('click', async function() {
+        // 🌟 BOTÓN DE PROCESAMIENTO MASIVO (INSTANTÁNEO)
+        document.getElementById('btnProcesarMasivo').addEventListener('click', function() {
             const input = document.getElementById('bulkInput');
             const ids = [...new Set(input.value.split(/[\n\t\s,]+/).filter(Boolean))];
             
-            this.disabled = true;
-            this.innerText = "Procesando...";
+            if(ids.length === 0) return;
+            
+            let exitosos = 0;
             
             for (let id of ids) {
-                await procesarCodigo(id, true);
-                await new Promise(r => setTimeout(r, 40)); 
+                let guardado = procesarCodigo(id, true);
+                if (guardado) exitosos++;
             }
             
             renderizarTabla();
             input.value = '';
-            this.disabled = false;
-            this.innerText = "Procesar";
-            mostrarNotificacion("✅ Procesamiento masivo finalizado");
+            
+            if (exitosos > 0) {
+                mostrarNotificacion(`⚡ ¡${exitosos} pedidos procesados al instante y sincronizando en la nube!`, "var(--success)");
+            } else {
+                mostrarNotificacion(`ℹ️ Ningún pedido nuevo procesado.`);
+            }
         });
 
         function mostrarNotificacion(msg, color) {
@@ -491,11 +551,23 @@
             if(color) toast.style.background = color;
             toast.innerText = msg;
             document.getElementById('toast-container').appendChild(toast);
-            setTimeout(() => toast.remove(), 4000); 
+            setTimeout(() => toast.remove(), 4500); 
         }
 
-        // 🌟 LIMPIAR LA BASE DE DATOS LOCAL AL SALIR
+        // 🌟 ESCUDOS DE SEGURIDAD PARA QUE NO CIERREN PESTAÑA A LA MITAD DEL GUARDADO
+        window.addEventListener('beforeunload', function (e) {
+            if (colaEnvioNube.length > 0) {
+                e.preventDefault();
+                e.returnValue = 'Aún se están guardando pedidos en la nube. Si sales ahora, perderás datos. ¿Seguro?';
+            }
+        });
+
         async function cerrarSesion() {
+            if (colaEnvioNube.length > 0) {
+                alert(`⚠️ ESPERA: Aún faltan por subir pedidos a la nube. Por favor, espera a que desaparezca el indicador de guardado amarillo en la parte superior antes de salir.`);
+                return; 
+            }
+            
             localStorage.removeItem('operador_actual');
             await localforage.clear();
             window.location.href = 'index.html';
