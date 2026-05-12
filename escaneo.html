@@ -82,16 +82,15 @@
             position: fixed; bottom: 20px; right: 20px; z-index: 9999; 
             display: flex; flex-direction: column; gap: 10px; 
             max-height: 85vh; overflow-y: auto; padding-right: 5px;
-            pointer-events: none; /* Permite clics a través de la zona invisible */
+            pointer-events: none;
         }
-        /* Ocultar barra de scroll del contenedor de toasts */
         #toast-container::-webkit-scrollbar { width: 4px; }
         #toast-container::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 4px; }
 
         .toast { 
             background: var(--sidebar); color: white; padding: 16px 24px; border-radius: 10px; 
             box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); animation: slideIn 0.3s ease-out; 
-            pointer-events: auto; /* El toast en sí bloquea clics para poder ser leído */
+            pointer-events: auto;
             font-size: 0.95rem;
         }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
@@ -151,15 +150,18 @@
                     <input type="file" id="fileUpload" accept=".xlsx, .xls, .csv">
                 </div>
                 <div>
-                    <label>2. Filtrar y Bloquear por Ciudad</label>
-                    <select id="filtroCiudad" disabled onchange="renderizarTabla()">
-                        <option value="GENERAL">Todas las ciudades (Modo Libre)</option>
-                        <option value="QUITO">QUITO</option>
-                        <option value="GUAYAQUIL">GUAYAQUIL</option>
-                        <option value="CUENCA">CUENCA</option>
-                        <option value="AMBATO">AMBATO</option>
-                        <option value="SANTO DOMINGO">SANTO DOMINGO</option>
-                        <option value="SANTA ANA">SANTA ANA</option>
+                    <label>2. Filtrar y Bloquear por Provincia</label>
+                    <select id="filtroProvincia" disabled onchange="renderizarTabla()">
+                        <option value="GENERAL">Todas las provincias (Modo Libre)</option>
+                        <option value="PICHINCHA">PICHINCHA</option>
+                        <option value="GUAYAS">GUAYAS</option>
+                        <option value="AZUAY">AZUAY</option>
+                        <option value="MANABI">MANABI</option>
+                        <option value="TUNGURAHUA">TUNGURAHUA</option>
+                        <option value="LOS RIOS">LOS RIOS</option>
+                        <option value="EL ORO">EL ORO</option>
+                        <option value="CHIMBORAZO">CHIMBORAZO</option>
+                        <option value="IMBABURA">IMBABURA</option>
                     </select>
                 </div>
                 <div>
@@ -186,7 +188,7 @@
                         <th>Estado</th>
                         <th>Cliente</th>
                         <th>Dirección</th>
-                        <th>Ciudad</th>
+                        <th>Provincia / Localidad</th>
                         <th style="text-align: right;">Acciones</th>
                     </tr>
                 </thead>
@@ -220,7 +222,8 @@
                     idpedido: p.idpedido,
                     referencia: p.Nro_Referencia,
                     estado: p.Estado,
-                    ciudad: p.Localidad
+                    // 🌟 Enviamos Provincia y Localidad juntas a la columna Ciudad de tu nube
+                    ciudad: `${p.Provincia} / ${p.Localidad}` 
                 }))
             };
 
@@ -238,7 +241,8 @@
                 idpedido: p.idpedido,
                 referencia: p.Nro_Referencia,
                 estado: p.Estado,
-                ciudad: p.Localidad
+                // 🌟 Igual aquí
+                ciudad: `${p.Provincia} / ${p.Localidad}` 
             };
             await fetch(GOOGLE_SHEET_URL, {
                 method: 'POST',
@@ -254,21 +258,15 @@
             
             while (colaEnvioNube.length > 0) {
                 document.getElementById('lblSyncCount').innerText = colaEnvioNube.length;
-                
                 let lote = colaEnvioNube.splice(0, colaEnvioNube.length); 
-                
                 try {
-                    if (lote.length === 1) {
-                        await enviarAGoogleSheets(lote[0]);
-                    } else {
-                        await enviarMasivoAGoogleSheets(lote);
-                    }
+                    if (lote.length === 1) { await enviarAGoogleSheets(lote[0]); } 
+                    else { await enviarMasivoAGoogleSheets(lote); }
                 } catch(e) {
                     colaEnvioNube.unshift(...lote); 
                     await new Promise(r => setTimeout(r, 2000));
                 }
             }
-            
             guardandoEnFondo = false;
             document.getElementById('lblSincronizando').style.display = 'none';
         }
@@ -295,8 +293,7 @@
 
                 if (savedMonitor && savedMonitor.length > 0) {
                     monitorData = savedMonitor;
-                    
-                    ['filtroCiudad', 'scannerInput', 'bulkInput', 'btnProcesarMasivo'].forEach(id => document.getElementById(id).disabled = false);
+                    ['filtroProvincia', 'scannerInput', 'bulkInput', 'btnProcesarMasivo'].forEach(id => document.getElementById(id).disabled = false);
                     document.getElementById('fileLabel').innerHTML = "✅ Monitor Activo en Memoria";
                     document.getElementById('fileLabel').style.color = "var(--success)";
                     
@@ -308,9 +305,7 @@
                 } else {
                     mostrarNotificacion("👋 ¡Bienvenido! Para comenzar, carga el archivo Excel del Monitor.", "var(--info)");
                 }
-            } catch (e) {
-                localforage.clear();
-            }
+            } catch (e) { localforage.clear(); }
         };
 
         document.getElementById('fileUpload').addEventListener('change', function(e) {
@@ -326,18 +321,19 @@
                     Cliente: String(row.Cliente || 'S/C'),
                     Direccion: String(row.direccion || row.Direccion || row.DIRECCION || '---'),
                     Localidad: String(row.Localidad || row.Ciudad || 'GENERAL'),
+                    // 🌟 CAPTURAMOS LA PROVINCIA DEL EXCEL
+                    Provincia: String(row.Provincia || row.PROVINCIA || 'GENERAL').toUpperCase().trim(),
                     Nro_Remito: String(row.Nro_Remito || row.Remito || '') 
                 })).filter(row => row.idpedido !== ''); 
                 
-                ['filtroCiudad', 'scannerInput', 'bulkInput', 'btnProcesarMasivo'].forEach(id => document.getElementById(id).disabled = false);
+                ['filtroProvincia', 'scannerInput', 'bulkInput', 'btnProcesarMasivo'].forEach(id => document.getElementById(id).disabled = false);
                 document.getElementById('fileLabel').innerHTML = "✅ Monitor Activo en Memoria";
                 document.getElementById('fileLabel').style.color = "var(--success)";
                 
-                mostrarNotificacion("✅ Nuevo Monitor cargado. Sincronizando con Google...", "var(--success)");
+                mostrarNotificacion("✅ Monitor cargado. Sincronizando datos previos...", "var(--success)");
                 
                 pedidosEscaneadosLista = [];
                 memoriaPedidos.clear();
-                
                 await sincronizarConNube();
             };
             reader.readAsArrayBuffer(e.target.files[0]);
@@ -356,7 +352,6 @@
                 if (Array.isArray(datosNube)) {
                     datosNube.forEach(p => {
                         if (!p.idpedido) return;
-
                         let esHoy = false;
                         let valFechaStr = String(p.fechasistema || p.fecha || "").toUpperCase();
                         let diaActual = hoy.getDate().toString();
@@ -369,7 +364,6 @@
 
                         if (esHoy && !memoriaPedidos.has(String(p.idpedido))) {
                             memoriaPedidos.add(String(p.idpedido));
-                            
                             const infoExcel = monitorData.find(row => row.idpedido === String(p.idpedido) || row.Nro_Referencia === String(p.idpedido));
                             
                             pedidosEscaneadosLista.push({
@@ -378,7 +372,8 @@
                                 Estado: infoExcel ? infoExcel.Estado : (p.estado || 'EN_TRANSITO'),
                                 Cliente: infoExcel ? infoExcel.Cliente : 'S/C',
                                 Direccion: infoExcel ? infoExcel.Direccion : '---',
-                                Localidad: infoExcel ? infoExcel.Localidad : (p.ciudad || 'GENERAL'),
+                                Localidad: infoExcel ? infoExcel.Localidad : 'GENERAL',
+                                Provincia: infoExcel ? infoExcel.Provincia : 'GENERAL',
                                 Nro_Remito: infoExcel ? infoExcel.Nro_Remito : '' 
                             });
                             recuperados++;
@@ -390,6 +385,8 @@
 
                     if (recuperados > 0) {
                         mostrarNotificacion(`✅ Se restauraron ${recuperados} pedidos escaneados HOY`, "var(--success)");
+                    } else {
+                        mostrarNotificacion(`ℹ️ No se encontraron pedidos escaneados previamente el día de hoy. ¡Lista limpia!`, "var(--info)");
                     }
                 }
             } catch (e) {
@@ -397,13 +394,11 @@
             }
         }
 
-        // PROCESAR CÓDIGO (INDIVIDUAL Y MASIVO)
+        // 🌟 LÓGICA DE BLOQUEO POR PROVINCIA
         function procesarCodigo(codigo, masivo = false) {
             let clean = String(codigo).trim(); 
             if (!clean) return { success: false, reason: 'empty' };
-            
             if (clean.endsWith("-1")) clean = clean.slice(0, -2);
-
             if (memoriaPedidos.has(clean)) {
                 if(!masivo) mostrarNotificacion(`⚠️ El pedido <b>${clean}</b> ya se escaneó hoy`, "#f59e0b");
                 return { success: false, reason: 'duplicate', id: clean };
@@ -412,12 +407,12 @@
             const info = monitorData.find(row => row.idpedido === clean || row.Nro_Referencia === clean);
 
             if (info) {
-                const filtroActual = document.getElementById('filtroCiudad').value;
-                const ciudadPaquete = String(info.Localidad || 'GENERAL').toUpperCase().trim();
+                const filtroActual = document.getElementById('filtroProvincia').value;
+                const provinciaPaquete = String(info.Provincia || 'GENERAL').toUpperCase().trim();
 
-                if (filtroActual !== "GENERAL" && ciudadPaquete !== filtroActual) {
-                    if(!masivo) mostrarNotificacion(`🚫 Bloqueado: <b>${clean}</b> es de <b>${ciudadPaquete}</b>`, "#ef4444");
-                    return { success: false, reason: 'blocked_city', id: clean, city: ciudadPaquete }; 
+                if (filtroActual !== "GENERAL" && provinciaPaquete !== filtroActual) {
+                    if(!masivo) mostrarNotificacion(`🚫 Bloqueado: <b>${clean}</b> pertenece a la provincia de <b>${provinciaPaquete}</b>`, "#ef4444");
+                    return { success: false, reason: 'blocked_city', id: clean, city: provinciaPaquete }; 
                 }
 
                 memoriaPedidos.add(String(info.idpedido));
@@ -428,7 +423,8 @@
                     Estado: info.Estado,
                     Cliente: info.Cliente,
                     Direccion: info.Direccion,
-                    Localidad: ciudadPaquete,
+                    Localidad: info.Localidad,
+                    Provincia: provinciaPaquete,
                     Nro_Remito: info.Nro_Remito
                 };
                 
@@ -449,31 +445,36 @@
             }
         }
 
-        function getColorCiudad(ciudad) {
-            const c = String(ciudad).toUpperCase().trim();
-            if (c.includes('QUITO')) return '#3b82f6'; 
-            if (c.includes('GUAYAQUIL')) return '#0ea5e9'; 
-            if (c.includes('CUENCA')) return '#8b5cf6'; 
-            if (c.includes('AMBATO')) return '#f59e0b'; 
-            if (c.includes('SANTO DOMINGO')) return '#10b981'; 
-            if (c.includes('SANTA ANA')) return '#ec4899'; 
-            return '#64748b'; 
+        // DICCIONARIO DE COLORES POR PROVINCIA
+        function getColorProvincia(provincia) {
+            const p = String(provincia).toUpperCase().trim();
+            if (p.includes('PICHINCHA')) return '#3b82f6'; // Azul
+            if (p.includes('GUAYAS')) return '#0ea5e9'; // Celeste
+            if (p.includes('AZUAY')) return '#8b5cf6'; // Morado
+            if (p.includes('TUNGURAHUA')) return '#f59e0b'; // Naranja
+            if (p.includes('MANABI')) return '#10b981'; // Verde
+            if (p.includes('LOS RIOS')) return '#ec4899'; // Rosa
+            if (p.includes('EL ORO')) return '#eab308'; // Amarillo
+            if (p.includes('CHIMBORAZO')) return '#ef4444'; // Rojo
+            if (p.includes('IMBABURA')) return '#14b8a6'; // Verde azulado
+            return '#64748b'; // Gris
         }
 
         function renderizarTabla() {
             const tbody = document.getElementById('listaPedidos');
-            const filtro = document.getElementById('filtroCiudad').value;
+            const filtro = document.getElementById('filtroProvincia').value;
             tbody.innerHTML = '';
 
             let filtrados = (filtro === "GENERAL") 
                 ? [...pedidosEscaneadosLista] 
-                : pedidosEscaneadosLista.filter(p => String(p.Localidad || "").toUpperCase().trim() === filtro);
+                : pedidosEscaneadosLista.filter(p => String(p.Provincia || "").toUpperCase().trim() === filtro);
 
             filtrados.reverse().forEach((p, i) => {
                 const tr = document.createElement('tr');
                 const badgeEstado = p.Estado?.includes('ENTRE') ? 'var(--success)' : (p.Estado?.includes('NOVE') ? 'var(--danger)' : 'var(--warning)');
-                const badgeCiudad = getColorCiudad(p.Localidad);
+                const badgeProvincia = getColorProvincia(p.Provincia);
                 const direccionTexto = p.Direccion || '---';
+                const nombreCiudad = p.Localidad || '---';
                 
                 tr.innerHTML = `
                     <td>${filtrados.length - i}</td>
@@ -482,7 +483,10 @@
                     <td><span class="badge" style="background:${badgeEstado}; color:white">${p.Estado}</span></td>
                     <td>${p.Cliente}</td>
                     <td><span class="text-truncate" title="${direccionTexto}">${direccionTexto}</span></td>
-                    <td><span class="badge" style="background:${badgeCiudad}; color:white">${p.Localidad}</span></td>
+                    <td>
+                        <span class="badge" style="background:${badgeProvincia}; color:white; margin-bottom:4px;">${p.Provincia}</span><br>
+                        <small style="color:var(--text-muted); font-weight:600;">${nombreCiudad}</small>
+                    </td>
                     <td style="text-align:right">
                         <button class="btn-action btn-del" onclick="eliminarPedido('${p.idpedido}')">Quitar</button>
                     </td>
@@ -530,7 +534,6 @@
             }
         });
 
-        // 🌟 BOTÓN DE PROCESAMIENTO MASIVO (AHORA CON NOTIFICACIONES INDIVIDUALES EN VIVO)
         document.getElementById('btnProcesarMasivo').addEventListener('click', function() {
             const input = document.getElementById('bulkInput');
             const ids = [...new Set(input.value.split(/[\n\t\s,]+/).filter(Boolean))];
@@ -539,14 +542,14 @@
             
             let exitosos = 0;
             
-            // Recorre los IDs y lanza la notificación pertinente para cada uno
             for (let id of ids) {
                 let resultado = procesarCodigo(id, true);
                 
                 if (resultado.success) {
                     exitosos++;
                 } else if (resultado.reason === 'blocked_city') {
-                    mostrarNotificacion(`🚫 <b>${resultado.id}</b> bloqueado (Es de ${resultado.city})`, "#ef4444");
+                    // Ahora alerta indicando la provincia
+                    mostrarNotificacion(`🚫 <b>${resultado.id}</b> bloqueado (Pertenece a <b>${resultado.city}</b>)`, "#ef4444");
                 } else if (resultado.reason === 'not_found') {
                     mostrarNotificacion(`❌ <b>${resultado.id}</b> no existe en el monitor`, "#ef4444");
                 } else if (resultado.reason === 'duplicate') {
@@ -557,7 +560,6 @@
             renderizarTabla();
             input.value = '';
             
-            // Mensaje final
             if (exitosos > 0) {
                 mostrarNotificacion(`⚡ ¡${exitosos} pedidos aceptados y en cola de subida!`, "var(--success)");
             } else {
