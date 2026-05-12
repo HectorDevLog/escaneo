@@ -78,9 +78,23 @@
         .btn-primary:disabled { background: #cbd5e1; cursor: not-allowed; }
 
         /* NOTIFICATIONS */
-        #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
-        .toast { background: var(--sidebar); color: white; padding: 16px 24px; border-radius: 10px; margin-top: 10px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2); animation: slideIn 0.3s ease-out; }
-        @keyframes slideIn { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        #toast-container { 
+            position: fixed; bottom: 20px; right: 20px; z-index: 9999; 
+            display: flex; flex-direction: column; gap: 10px; 
+            max-height: 85vh; overflow-y: auto; padding-right: 5px;
+            pointer-events: none; /* Permite clics a través de la zona invisible */
+        }
+        /* Ocultar barra de scroll del contenedor de toasts */
+        #toast-container::-webkit-scrollbar { width: 4px; }
+        #toast-container::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 4px; }
+
+        .toast { 
+            background: var(--sidebar); color: white; padding: 16px 24px; border-radius: 10px; 
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); animation: slideIn 0.3s ease-out; 
+            pointer-events: auto; /* El toast en sí bloquea clics para poder ser leído */
+            font-size: 0.95rem;
+        }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
         .stats { display: flex; gap: 20px; margin-top: 10px; align-items: center; }
         .stat-val { font-weight: 800; color: var(--primary); }
@@ -190,7 +204,7 @@
         let memoriaPedidos = new Set(); 
         let operadorActual = "";
 
-        // 🚀 NUEVO MOTOR DE ENVÍO MASIVO
+        // COLA DE ENVÍO EN SEGUNDO PLANO
         let colaEnvioNube = [];
         let guardandoEnFondo = false;
 
@@ -198,7 +212,6 @@
             const opcionesFecha = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
             const fechaLarga = new Date().toLocaleDateString('es-ES', opcionesFecha).toUpperCase();
 
-            // Preparamos el paquete con TODOS los pedidos del lote
             const payload = {
                 action: 'guardar_masivo',
                 pedidos: lotePedidos.map(p => ({
@@ -213,13 +226,12 @@
 
             await fetch(GOOGLE_SHEET_URL, {
                 method: 'POST',
-                mode: 'no-cors', // Evita bloqueos CORS del navegador
+                mode: 'no-cors',
                 body: JSON.stringify(payload)
             });
         }
 
         async function enviarAGoogleSheets(p) {
-            // Envío clásico de 1 solo pedido
             const payload = {
                 fecha: new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase(),
                 usuario: operadorActual,
@@ -243,18 +255,16 @@
             while (colaEnvioNube.length > 0) {
                 document.getElementById('lblSyncCount').innerText = colaEnvioNube.length;
                 
-                // 📦 TOMAMOS TODOS LOS PEDIDOS QUE ESTÉN EN LA FILA DE GOLPE
                 let lote = colaEnvioNube.splice(0, colaEnvioNube.length); 
                 
                 try {
                     if (lote.length === 1) {
-                        await enviarAGoogleSheets(lote[0]); // Si es 1, envío normal
+                        await enviarAGoogleSheets(lote[0]);
                     } else {
-                        await enviarMasivoAGoogleSheets(lote); // Si son varios, envío en bloque ultra rápido
+                        await enviarMasivoAGoogleSheets(lote);
                     }
                 } catch(e) {
-                    console.error("Fallo de red, reintentando paquete...", e);
-                    colaEnvioNube.unshift(...lote); // Devuelve los pedidos a la fila si falla el internet
+                    colaEnvioNube.unshift(...lote); 
                     await new Promise(r => setTimeout(r, 2000));
                 }
             }
@@ -295,6 +305,8 @@
                         pedidosEscaneadosLista.forEach(p => memoriaPedidos.add(String(p.idpedido)));
                     }
                     renderizarTabla();
+                } else {
+                    mostrarNotificacion("👋 ¡Bienvenido! Para comenzar, carga el archivo Excel del Monitor.", "var(--info)");
                 }
             } catch (e) {
                 localforage.clear();
@@ -321,7 +333,7 @@
                 document.getElementById('fileLabel').innerHTML = "✅ Monitor Activo en Memoria";
                 document.getElementById('fileLabel').style.color = "var(--success)";
                 
-                mostrarNotificacion("✅ Nuevo Monitor cargado. Sincronizando con Google...");
+                mostrarNotificacion("✅ Nuevo Monitor cargado. Sincronizando con Google...", "var(--success)");
                 
                 pedidosEscaneadosLista = [];
                 memoriaPedidos.clear();
@@ -377,7 +389,7 @@
                     await guardarEstadoLocal(); 
 
                     if (recuperados > 0) {
-                        mostrarNotificacion(`✅ Se restauraron ${recuperados} pedidos escaneados HOY`);
+                        mostrarNotificacion(`✅ Se restauraron ${recuperados} pedidos escaneados HOY`, "var(--success)");
                     }
                 }
             } catch (e) {
@@ -385,16 +397,16 @@
             }
         }
 
-        // PROCESAMIENTO
+        // PROCESAR CÓDIGO (INDIVIDUAL Y MASIVO)
         function procesarCodigo(codigo, masivo = false) {
             let clean = String(codigo).trim(); 
-            if (!clean) return false;
+            if (!clean) return { success: false, reason: 'empty' };
             
             if (clean.endsWith("-1")) clean = clean.slice(0, -2);
 
             if (memoriaPedidos.has(clean)) {
-                if(!masivo) mostrarNotificacion(`⚠️ El pedido ${clean} ya se escaneó hoy`, "#f59e0b");
-                return false;
+                if(!masivo) mostrarNotificacion(`⚠️ El pedido <b>${clean}</b> ya se escaneó hoy`, "#f59e0b");
+                return { success: false, reason: 'duplicate', id: clean };
             }
 
             const info = monitorData.find(row => row.idpedido === clean || row.Nro_Referencia === clean);
@@ -404,8 +416,8 @@
                 const ciudadPaquete = String(info.Localidad || 'GENERAL').toUpperCase().trim();
 
                 if (filtroActual !== "GENERAL" && ciudadPaquete !== filtroActual) {
-                    if(!masivo) mostrarNotificacion(`🚫 Bloqueado: ID ${clean} es de ${ciudadPaquete}`, "#ef4444");
-                    return false; 
+                    if(!masivo) mostrarNotificacion(`🚫 Bloqueado: <b>${clean}</b> es de <b>${ciudadPaquete}</b>`, "#ef4444");
+                    return { success: false, reason: 'blocked_city', id: clean, city: ciudadPaquete }; 
                 }
 
                 memoriaPedidos.add(String(info.idpedido));
@@ -420,22 +432,20 @@
                     Nro_Remito: info.Nro_Remito
                 };
                 
-                // Muestra en tabla al INSTANTE
                 pedidosEscaneadosLista.push(nuevoPedido);
                 guardarEstadoLocal(); 
                 
-                // Metemos a la fila de espera
                 colaEnvioNube.push(nuevoPedido);
-                procesarColaEnvio(); // Inicia motor de fondo
+                procesarColaEnvio(); 
                 
                 if (!masivo) {
                     renderizarTabla();
-                    mostrarNotificacion(`✅ Pedido ${info.idpedido} registrado`);
+                    mostrarNotificacion(`✅ Pedido <b>${info.idpedido}</b> registrado`, "var(--success)");
                 }
-                return true;
+                return { success: true, id: info.idpedido };
             } else {
-                if(!masivo) mostrarNotificacion(`❌ ID ${clean} no se encuentra en el Monitor`, "#ef4444");
-                return false;
+                if(!masivo) mostrarNotificacion(`❌ ID <b>${clean}</b> no se encuentra en el Monitor`, "#ef4444");
+                return { success: false, reason: 'not_found', id: clean };
             }
         }
 
@@ -505,7 +515,6 @@
             }
         }
 
-        // --- INPUTS Y EVENTOS ---
         document.getElementById('scannerInput').addEventListener('input', function(e) {
             let val = this.value.trim();
             if (/^\d{7}$/.test(val) || val.endsWith('-1')) {
@@ -521,7 +530,7 @@
             }
         });
 
-        // 🌟 BOTÓN DE PROCESAMIENTO MASIVO (INSTANTÁNEO)
+        // 🌟 BOTÓN DE PROCESAMIENTO MASIVO (AHORA CON NOTIFICACIONES INDIVIDUALES EN VIVO)
         document.getElementById('btnProcesarMasivo').addEventListener('click', function() {
             const input = document.getElementById('bulkInput');
             const ids = [...new Set(input.value.split(/[\n\t\s,]+/).filter(Boolean))];
@@ -530,18 +539,29 @@
             
             let exitosos = 0;
             
+            // Recorre los IDs y lanza la notificación pertinente para cada uno
             for (let id of ids) {
-                let guardado = procesarCodigo(id, true);
-                if (guardado) exitosos++;
+                let resultado = procesarCodigo(id, true);
+                
+                if (resultado.success) {
+                    exitosos++;
+                } else if (resultado.reason === 'blocked_city') {
+                    mostrarNotificacion(`🚫 <b>${resultado.id}</b> bloqueado (Es de ${resultado.city})`, "#ef4444");
+                } else if (resultado.reason === 'not_found') {
+                    mostrarNotificacion(`❌ <b>${resultado.id}</b> no existe en el monitor`, "#ef4444");
+                } else if (resultado.reason === 'duplicate') {
+                    mostrarNotificacion(`⚠️ <b>${resultado.id}</b> ya escaneado`, "#f59e0b");
+                }
             }
             
             renderizarTabla();
             input.value = '';
             
+            // Mensaje final
             if (exitosos > 0) {
-                mostrarNotificacion(`⚡ ¡${exitosos} pedidos procesados al instante y sincronizando en la nube!`, "var(--success)");
+                mostrarNotificacion(`⚡ ¡${exitosos} pedidos aceptados y en cola de subida!`, "var(--success)");
             } else {
-                mostrarNotificacion(`ℹ️ Ningún pedido nuevo procesado.`);
+                mostrarNotificacion(`ℹ️ Ningún pedido nuevo fue procesado.`, "var(--info)");
             }
         });
 
@@ -549,12 +569,11 @@
             const toast = document.createElement('div');
             toast.className = 'toast';
             if(color) toast.style.background = color;
-            toast.innerText = msg;
+            toast.innerHTML = msg; 
             document.getElementById('toast-container').appendChild(toast);
-            setTimeout(() => toast.remove(), 4500); 
+            setTimeout(() => toast.remove(), 5000); 
         }
 
-        // 🌟 ESCUDOS DE SEGURIDAD PARA QUE NO CIERREN PESTAÑA A LA MITAD DEL GUARDADO
         window.addEventListener('beforeunload', function (e) {
             if (colaEnvioNube.length > 0) {
                 e.preventDefault();
@@ -564,7 +583,7 @@
 
         async function cerrarSesion() {
             if (colaEnvioNube.length > 0) {
-                alert(`⚠️ ESPERA: Aún faltan por subir pedidos a la nube. Por favor, espera a que desaparezca el indicador de guardado amarillo en la parte superior antes de salir.`);
+                alert(`⚠️ ESPERA: Aún faltan por subir pedidos a la nube. Por favor, espera a que desaparezca el indicador de guardado amarillo antes de salir.`);
                 return; 
             }
             
