@@ -117,6 +117,7 @@
                 <h1>Asignación de Guías (Tracking)</h1>
                 <div class="stats">
                     <span>Total Pedidos: <span class="stat-val" id="lblTotal">0</span></span>
+                    <span>Mostrando: <span class="stat-val" id="lblVisibles">0</span></span>
                     <span>Guías Listas: <span class="stat-val" id="lblProcesados" style="color: var(--success)">0</span></span>
                 </div>
             </div>
@@ -132,15 +133,18 @@
         <div class="card">
             <div class="grid-inputs">
                 <div>
-                    <label>1. Filtro de Ciudad:</label>
-                    <select id="filtroCiudad" disabled onchange="renderizarTabla()">
+                    <label>1. Filtro de Provincia:</label>
+                    <select id="filtroProvincia" disabled onchange="renderizarTabla()">
                         <option value="GENERAL">TODAS (General)</option>
-                        <option value="QUITO">QUITO</option>
-                        <option value="GUAYAQUIL">GUAYAQUIL</option>
-                        <option value="CUENCA">CUENCA</option>
-                        <option value="AMBATO">AMBATO</option>
-                        <option value="SANTO DOMINGO">SANTO DOMINGO</option>
-                        <option value="SANTA ANA">SANTA ANA</option>
+                        <option value="PICHINCHA">PICHINCHA</option>
+                        <option value="GUAYAS">GUAYAS</option>
+                        <option value="AZUAY">AZUAY</option>
+                        <option value="MANABI">MANABI</option>
+                        <option value="TUNGURAHUA">TUNGURAHUA</option>
+                        <option value="LOS RIOS">LOS RIOS</option>
+                        <option value="EL ORO">EL ORO</option>
+                        <option value="CHIMBORAZO">CHIMBORAZO</option>
+                        <option value="IMBABURA">IMBABURA</option>
                     </select>
                 </div>
 
@@ -173,7 +177,7 @@
                         <th>ID Pedido</th>
                         <th>Referencia</th>
                         <th>Cliente</th>
-                        <th>Ciudad</th>
+                        <th>Provincia / Localidad</th>
                         <th style="width: 250px; text-align: center;">GUÍA (REMITO)</th>
                     </tr>
                 </thead>
@@ -185,6 +189,7 @@
     <script>
         let pedidosGuiasLista = []; 
         let operadorActual = "";
+        let visiblesActuales = 0; // Para el contador
 
         window.onload = async function() {
             operadorActual = localStorage.getItem('operador_actual');
@@ -200,12 +205,11 @@
             const panelCarga = document.getElementById('panelCarga');
 
             try {
-                // 🌟 LEEMOS DE LA MEMORIA DE LOCALFORAGE
+                // LEEMOS DE LA MEMORIA DE LOCALFORAGE
                 const cargaDistribucion = await localforage.getItem('pedidosEscaneados_flexnet');
                 
                 if (cargaDistribucion && cargaDistribucion.length > 0) {
                     
-                    // 1. Evaluamos la base de distribución. Ahora leemos directamente Nro_Remito que viaja desde escaneo.html
                     pedidosGuiasLista = cargaDistribucion.map(p => {
                         let remitoOriginal = String(p.Nro_Remito || "").trim();
                         let tieneRemito = remitoOriginal !== "";
@@ -217,7 +221,7 @@
                         };
                     });
 
-                    // 2. Si ya habías guardado cambios manuales, los fusionamos
+                    // Fusionamos cambios manuales
                     const progresoGuias = localStorage.getItem('estado_guias_aplicadas');
                     if (progresoGuias) {
                         let guardados = JSON.parse(progresoGuias);
@@ -235,7 +239,7 @@
                     panelCarga.classList.add('estado-ok');
                     panelCarga.innerText = `✅ Sincronización exitosa. ${pedidosGuiasLista.length} pedidos listos.`;
                     
-                    ['filtroCiudad', 'inputPrefijo', 'bulkInput', 'btnAplicarMasivo'].forEach(id => document.getElementById(id).disabled = false);
+                    ['filtroProvincia', 'inputPrefijo', 'bulkInput', 'btnAplicarMasivo'].forEach(id => document.getElementById(id).disabled = false);
                     
                     renderizarTabla();
                 } else {
@@ -252,7 +256,7 @@
             const toast = document.createElement('div');
             toast.className = 'toast';
             if (color) toast.style.backgroundColor = color;
-            toast.innerText = msg;
+            toast.innerHTML = msg; 
             container.appendChild(toast);
             setTimeout(() => toast.remove(), 3500);
         }
@@ -269,7 +273,7 @@
         function aplicarGuiasMasivas() {
             const prefijo = document.getElementById('inputPrefijo').value.trim().toUpperCase();
             const textoPegado = document.getElementById('bulkInput').value.trim();
-            const filtroActual = document.getElementById('filtroCiudad').value;
+            const filtroActual = document.getElementById('filtroProvincia').value;
 
             if (!textoPegado) return mostrarNotificacion("⚠️ DEBES PEGAR LOS NÚMEROS DE GUÍA PRIMERO", "#dc3545");
 
@@ -277,8 +281,8 @@
 
             let listaVisibleIndices = [];
             pedidosGuiasLista.forEach((p, index) => {
-                const ciudadP = (p.Localidad || "GENERAL").toUpperCase().trim();
-                if ((filtroActual === "GENERAL" || ciudadP === filtroActual) && !p.Viene_Con_Guia) {
+                const provinciaP = String(p.Provincia || "GENERAL").toUpperCase().trim();
+                if ((filtroActual === "GENERAL" || provinciaP === filtroActual) && !p.Viene_Con_Guia) {
                     listaVisibleIndices.push(index);
                 }
             });
@@ -318,28 +322,35 @@
             }
         }
 
+        // 🌟 ACTUALIZAR CONTADORES MODIFICADO
         function actualizarContadores() {
             document.getElementById('lblTotal').innerText = pedidosGuiasLista.length;
+            document.getElementById('lblVisibles').innerText = visiblesActuales;
             document.getElementById('lblProcesados').innerText = pedidosGuiasLista.filter(p => p.Guia_Asignada !== "").length;
         }
 
-        function getColorCiudad(ciudad) {
-            const c = String(ciudad).toUpperCase().trim();
-            if (c.includes('QUITO')) return '#3b82f6'; 
-            if (c.includes('GUAYAQUIL')) return '#0ea5e9'; 
-            if (c.includes('CUENCA')) return '#8b5cf6'; 
-            if (c.includes('AMBATO')) return '#f59e0b'; 
-            if (c.includes('SANTO DOMINGO')) return '#10b981'; 
-            if (c.includes('SANTA ANA')) return '#ec4899'; 
+        function getColorProvincia(provincia) {
+            const p = String(provincia).toUpperCase().trim();
+            if (p.includes('PICHINCHA')) return '#3b82f6'; 
+            if (p.includes('GUAYAS')) return '#0ea5e9'; 
+            if (p.includes('AZUAY')) return '#8b5cf6'; 
+            if (p.includes('TUNGURAHUA')) return '#f59e0b'; 
+            if (p.includes('MANABI')) return '#10b981'; 
+            if (p.includes('LOS RIOS')) return '#ec4899'; 
+            if (p.includes('EL ORO')) return '#eab308'; 
+            if (p.includes('CHIMBORAZO')) return '#ef4444'; 
+            if (p.includes('IMBABURA')) return '#14b8a6'; 
             return '#64748b'; 
         }
 
         function renderizarTabla() {
             const tbody = document.getElementById('listaPedidos');
-            const filtro = document.getElementById('filtroCiudad').value;
+            const filtro = document.getElementById('filtroProvincia').value;
             tbody.innerHTML = '';
 
-            let lista = (filtro === "GENERAL") ? pedidosGuiasLista : pedidosGuiasLista.filter(p => String(p.Localidad || "").toUpperCase().trim() === filtro);
+            let lista = (filtro === "GENERAL") ? pedidosGuiasLista : pedidosGuiasLista.filter(p => String(p.Provincia || "").toUpperCase().trim() === filtro);
+
+            visiblesActuales = lista.length; // Guardamos cuántos se están mostrando
 
             lista.forEach((p, i) => {
                 const tr = document.createElement('tr');
@@ -348,14 +359,14 @@
                 
                 let celdaGuiaHTML = "";
                 
-                // 🌟 LÓGICA DE BLOQUEO: Si viene de fábrica, se muestra verde oscuro y no se puede editar
                 if (p.Viene_Con_Guia) {
                     celdaGuiaHTML = `<span class="guia-original">📄 ${p.Guia_Asignada}</span>`;
                 } else {
                     celdaGuiaHTML = `<input type="text" class="input-guia-tabla" placeholder="Escribir guía..." value="${p.Guia_Asignada}" oninput="actualizarGuiaManual('${p.idpedido}', this.value)">`;
                 }
 
-                const badgeCiudad = getColorCiudad(p.Localidad);
+                const badgeProvincia = getColorProvincia(p.Provincia);
+                const nombreCiudad = p.Localidad || '---';
                 const clienteTxt = p.Cliente || '---';
 
                 tr.innerHTML = `
@@ -363,7 +374,10 @@
                     <td><b>${p.idpedido}</b></td>
                     <td>${p.Nro_Referencia || '-'}</td>
                     <td><span class="text-truncate" title="${clienteTxt}">${clienteTxt}</span></td>
-                    <td><span class="badge" style="background:${badgeCiudad}">${p.Localidad || 'GENERAL'}</span></td>
+                    <td>
+                        <span class="badge" style="background:${badgeProvincia}; color:white; margin-bottom:4px;">${p.Provincia || 'GENERAL'}</span><br>
+                        <small style="color:var(--text-muted); font-weight:600;">${nombreCiudad}</small>
+                    </td>
                     <td style="text-align: center;">
                         ${celdaGuiaHTML}
                     </td>

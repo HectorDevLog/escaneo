@@ -12,7 +12,6 @@
         :root {
             --primary: #4f46e5; --primary-dark: #4338ca;
             --bg: #f8fafc;
-            /* 🌟 CAMBIO: Color lateral Indigo Oscuro para distinguir el apartado */
             --sidebar: #312e81; /* Indigo-900 */
             --text-main: #1e293b; --text-muted: #64748b;
             --white: #ffffff; --danger: #ef4444; --success: #22c55e;
@@ -32,14 +31,12 @@
         .brand { font-size: 1.5rem; font-weight: 800; margin-bottom: 40px; display: flex; align-items: center; gap: 10px; }
         .nav-link {
             padding: 12px 15px; border-radius: 8px;
-            /* 🌟 AJUSTE: Color de texto inactivo más claro para fondo indigo */
             color: #c7d2fe; /* Indigo-200 */
             text-decoration: none;
             font-weight: 600; margin-bottom: 5px; transition: all 0.2s; display: block;
         }
         .nav-link:hover { background: rgba(255,255,255,0.1); color: white; }
         .nav-link.active {
-            /* 🌟 AJUSTE: Enlace activo contrastado contra fondo indigo */
             background: var(--white);
             color: var(--primary);
         }
@@ -142,15 +139,18 @@
         <div class="card">
             <div class="grid-inputs">
                 <div>
-                    <label>1. Filtro de Ciudad:</label>
-                    <select id="filtroCiudad" disabled onchange="renderizarTabla()">
+                    <label>1. Filtro de Provincia:</label>
+                    <select id="filtroProvincia" disabled onchange="renderizarTabla()">
                         <option value="GENERAL">TODAS (General)</option>
-                        <option value="QUITO">QUITO</option>
-                        <option value="GUAYAQUIL">GUAYAQUIL</option>
-                        <option value="CUENCA">CUENCA</option>
-                        <option value="AMBATO">AMBATO</option>
-                        <option value="SANTO DOMINGO">SANTO DOMINGO</option>
-                        <option value="SANTA ANA">SANTA ANA</option>
+                        <option value="PICHINCHA">PICHINCHA</option>
+                        <option value="GUAYAS">GUAYAS</option>
+                        <option value="AZUAY">AZUAY</option>
+                        <option value="MANABI">MANABI</option>
+                        <option value="TUNGURAHUA">TUNGURAHUA</option>
+                        <option value="LOS RIOS">LOS RIOS</option>
+                        <option value="EL ORO">EL ORO</option>
+                        <option value="CHIMBORAZO">CHIMBORAZO</option>
+                        <option value="IMBABURA">IMBABURA</option>
                     </select>
                 </div>
 
@@ -191,7 +191,7 @@
                         <th>Fecha Evento</th>
                         <th>Cliente</th>
                         <th>Dirección</th>
-                        <th>Ciudad</th>
+                        <th>Provincia / Localidad</th>
                     </tr>
                 </thead>
                 <tbody id="listaPedidos"></tbody>
@@ -201,12 +201,10 @@
 
     <div id="toast-container"></div>
 
-    <script src="configuracion_nube.js"></script>
     <script>
         let pedidosEventosLista = []; 
         let operadorActual = "";
 
-        // AL CARGAR LA PÁGINA
         window.onload = async function() {
             operadorActual = localStorage.getItem('operador_actual');
             if (!operadorActual) {
@@ -219,7 +217,6 @@
             
             setFechaRapida('hoy');
 
-            // 🌟 LEEMOS DE LA MEMORIA DE LOCALFORAGE (Igual que en escaneo.html)
             try {
                 const cargaDistribucion = await localforage.getItem('pedidosEscaneados_flexnet');
                 
@@ -231,7 +228,7 @@
                     document.getElementById('panelCarga').classList.add('estado-ok');
                     document.getElementById('panelCarga').innerText = `✅ Base sincronizada con ${pedidosEventosLista.length} pedidos escaneados.`;
                     
-                    ['filtroCiudad', 'selectEvento', 'inputFechaEvento', 'btnAplicarMasivo', 'btnHoy', 'btnManana'].forEach(id => document.getElementById(id).disabled = false);
+                    ['filtroProvincia', 'selectEvento', 'inputFechaEvento', 'btnAplicarMasivo', 'btnHoy', 'btnManana'].forEach(id => document.getElementById(id).disabled = false);
                     renderizarTabla();
                 } else {
                     document.getElementById('panelCarga').innerText = `⚠️ No hay pedidos escaneados en memoria. Ve al Módulo de Distribución primero.`;
@@ -253,7 +250,7 @@
         async function aplicarEventoMasivo() {
             const evento = document.getElementById('selectEvento').value;
             const fecha = document.getElementById('inputFechaEvento').value;
-            const filtro = document.getElementById('filtroCiudad').value;
+            const filtro = document.getElementById('filtroProvincia').value;
 
             if (!evento || !fecha) {
                 mostrarNotificacion("⚠️ Selecciona un Evento y una Fecha.", "var(--warning)");
@@ -263,10 +260,10 @@
             let procesadosCSV = [];
             
             pedidosEventosLista.forEach(p => {
-                const ciudadP = String(p.Localidad || "GENERAL").toUpperCase().trim();
+                const provinciaP = String(p.Provincia || "GENERAL").toUpperCase().trim();
                 
-                // Aplicamos solo a la ciudad filtrada (o a todos si está en GENERAL)
-                if (filtro === "GENERAL" || ciudadP === filtro) {
+                // Aplicamos solo a la provincia filtrada
+                if (filtro === "GENERAL" || provinciaP === filtro) {
                     p.Nuevo_Evento_Aplicado = evento;
                     p.Fecha_Evento_Aplicado = fecha;
                     procesadosCSV.push(p);
@@ -284,7 +281,7 @@
                 descargarCSV(procesadosCSV, evento, fecha);
                 mostrarNotificacion(`✅ CSV Generado con ${procesadosCSV.length} pedidos actualizados.`, "var(--success)");
             } else {
-                mostrarNotificacion(`❌ No se encontraron pedidos para la ciudad seleccionada.`, "var(--info)");
+                mostrarNotificacion(`❌ No se encontraron pedidos para la provincia seleccionada.`, "var(--info)");
             }
         }
 
@@ -300,7 +297,7 @@
                     idpedido: p.idpedido,
                     referencia: p.Nro_Referencia,
                     estado: p.Estado,
-                    ciudad: p.Localidad
+                    ciudad: `${p.Provincia} / ${p.Localidad}` // Manteniendo consistencia
                 };
 
                 fetch(GOOGLE_SHEET_URL, {
@@ -334,23 +331,27 @@
             document.body.removeChild(link);
         }
 
-        function getColorCiudad(ciudad) {
-            const c = String(ciudad).toUpperCase().trim();
-            if (c.includes('QUITO')) return '#3b82f6'; 
-            if (c.includes('GUAYAQUIL')) return '#0ea5e9'; 
-            if (c.includes('CUENCA')) return '#8b5cf6'; 
-            if (c.includes('AMBATO')) return '#f59e0b'; 
-            if (c.includes('SANTO DOMINGO')) return '#10b981'; 
-            if (c.includes('SANTA ANA')) return '#ec4899'; 
+        // COLORES POR PROVINCIA
+        function getColorProvincia(provincia) {
+            const p = String(provincia).toUpperCase().trim();
+            if (p.includes('PICHINCHA')) return '#3b82f6'; 
+            if (p.includes('GUAYAS')) return '#0ea5e9'; 
+            if (p.includes('AZUAY')) return '#8b5cf6'; 
+            if (p.includes('TUNGURAHUA')) return '#f59e0b'; 
+            if (p.includes('MANABI')) return '#10b981'; 
+            if (p.includes('LOS RIOS')) return '#ec4899'; 
+            if (p.includes('EL ORO')) return '#eab308'; 
+            if (p.includes('CHIMBORAZO')) return '#ef4444'; 
+            if (p.includes('IMBABURA')) return '#14b8a6'; 
             return '#64748b'; 
         }
 
         function renderizarTabla() {
             const tbody = document.getElementById('listaPedidos');
-            const filtro = document.getElementById('filtroCiudad').value;
+            const filtro = document.getElementById('filtroProvincia').value;
             tbody.innerHTML = '';
 
-            let lista = (filtro === "GENERAL") ? pedidosEventosLista : pedidosEventosLista.filter(p => String(p.Localidad || "").toUpperCase().trim() === filtro);
+            let lista = (filtro === "GENERAL") ? pedidosEventosLista : pedidosEventosLista.filter(p => String(p.Provincia || "").toUpperCase().trim() === filtro);
 
             lista.forEach((p, i) => {
                 const tr = document.createElement('tr');
@@ -365,8 +366,9 @@
                 }
 
                 const badgeEstado = p.Estado?.includes('ENTRE') ? 'var(--success)' : (p.Estado?.includes('NOVE') ? 'var(--danger)' : 'var(--warning)');
-                const badgeCiudad = getColorCiudad(p.Localidad);
+                const badgeProvincia = getColorProvincia(p.Provincia);
                 const direccionTexto = p.Direccion || '---';
+                const nombreCiudad = p.Localidad || '---';
 
                 tr.innerHTML = `
                     <td>${i+1}</td>
@@ -376,7 +378,10 @@
                     <td>${celdaFecha}</td>
                     <td>${p.Cliente || '---'}</td>
                     <td><span class="text-truncate" title="${direccionTexto}">${direccionTexto}</span></td>
-                    <td><span class="badge" style="background:${badgeCiudad}; color:white">${p.Localidad || 'GENERAL'}</span></td>
+                    <td>
+                        <span class="badge" style="background:${badgeProvincia}; color:white; margin-bottom:4px;">${p.Provincia || 'GENERAL'}</span><br>
+                        <small style="color:var(--text-muted); font-weight:600;">${nombreCiudad}</small>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
