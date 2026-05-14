@@ -45,11 +45,11 @@
         .header-titles h1 { margin: 0; font-size: 1.8rem; font-weight: 800; color: var(--text-main); text-transform: uppercase;}
         .header-titles p { margin: 5px 0 0 0; font-weight: 700; color: var(--primary); font-size: 0.9rem;}
         
-        /* 🌟 NUEVOS ESTILOS PARA LOS CONTADORES SUPERIORES */
+        /* CONTADORES SUPERIORES */
         .stats { display: flex; gap: 20px; margin-top: 12px; font-size: 0.95rem; color: var(--text-muted); font-weight: 600;}
         .stat-val { font-weight: 800; color: var(--primary); }
 
-        .user-pill { background: white; padding: 8px 18px; border-radius: 50px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); font-weight: 600; border: 1px solid #e2e8f0; margin-top: 5px; }
+        .user-pill { background: white; padding: 8px 18px; border-radius: 50px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); font-weight: 600; border: 1px solid #e2e8f0; margin-top: 5px; display: flex; align-items: center; gap: 8px;}
 
         /* CARDS & CONTROLS */
         .card { background: var(--white); border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; margin-bottom: 20px; }
@@ -83,20 +83,59 @@
         .badge { padding: 5px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; display: inline-block; color: white;}
         .text-truncate { max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
 
+        /* ESTILOS DE PICKING */
+        .btn-picking { padding: 6px 12px; background: #fef2f2; color: var(--primary-dark); border: 2px solid var(--primary); border-radius: 8px; font-weight: 800; cursor: pointer; font-size: 0.85rem; transition: 0.2s;}
+        .btn-picking:hover { background: var(--primary); color: white; }
+
+        /* MENÚ FLOTANTE HEXAGONAL */
+        .hex-modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.92); z-index: 100000;
+            display: none; justify-content: center; align-items: center; flex-direction: column;
+            backdrop-filter: blur(8px);
+        }
+        .hex-title { color: white; font-size: 1.5rem; font-weight: 800; margin-bottom: 30px; letter-spacing: 1px; text-align: center; }
+        .hex-container { display: flex; flex-wrap: wrap; justify-content: center; max-width: 800px; gap: 15px; padding: 20px; }
+        .hex-wrapper {
+            width: 130px; height: 145px;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            background: #334155; display: flex; justify-content: center; align-items: center;
+            cursor: pointer; transition: transform 0.2s, filter 0.2s;
+        }
+        .hex-inner {
+            width: 124px; height: 139px;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            background: #0f172a; display: flex; flex-direction: column; justify-content: center; align-items: center;
+            color: #cbd5e1; text-align: center; transition: all 0.3s;
+        }
+        .hex-wrapper:hover { transform: scale(1.08); filter: drop-shadow(0 0 10px rgba(255,255,255,0.2)); }
+        .hex-wrapper:hover .hex-inner { background: #1e293b; color: white; }
+        .hex-wrapper.active { background: var(--primary); filter: drop-shadow(0 0 15px rgba(220, 38, 38, 0.4));}
+        .hex-wrapper.active .hex-inner { color: var(--primary); }
+        .hex-icon { font-size: 26px; margin-bottom: 8px; }
+        .hex-text { font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;}
+        .btn-close-hex {
+            margin-top: 40px; padding: 10px 24px; background: transparent; border: 2px solid #64748b; color: #cbd5e1;
+            border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.3s;
+        }
+        .btn-close-hex:hover { background: #64748b; color: white; }
+
+        /* NOTIFICATIONS */
+        #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 999999; display: flex; flex-direction: column; gap: 10px; max-height: 85vh; overflow-y: auto; padding-right: 5px; pointer-events: none;}
+        #toast-container::-webkit-scrollbar { width: 4px; }
+        #toast-container::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 4px; }
+        .toast { background: var(--sidebar); color: white; padding: 16px 24px; border-radius: 10px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); animation: slideIn 0.3s ease-out; pointer-events: auto; font-size: 0.95rem; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
         /* CONFIGURACIÓN DE IMPRESIÓN LIMPIA */
         @media print {
             @page { size: landscape; margin: 10mm; }
             body { background: white; color: black; }
-            .sidebar, .card, .user-pill, .stats { display: none !important; } /* Ocultamos .stats en la impresión */
+            .sidebar, .card, .user-pill, .stats, #toast-container, .hex-modal-overlay { display: none !important; }
             .main-content { padding: 0; overflow: visible; display: block; }
             .table-container { border: none; border-radius: 0; }
             table, th, td { border: 1px solid #000; }
-            th { 
-                background-color: #eee !important; 
-                -webkit-print-color-adjust: exact; 
-                print-color-adjust: exact; 
-                color: black; 
-            }
+            th { background-color: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: black; }
             .badge { background: transparent !important; color: black !important; border: 1px solid black; padding: 2px 6px; }
             .header { border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 15px;}
             .resumen-final { border: 1px solid black; background: transparent; }
@@ -104,6 +143,14 @@
     </style>
 </head>
 <body>
+
+    <div id="modalPicking" class="hex-modal-overlay">
+        <div class="hex-title">SELECCIONA EL GRUPO DE CARGA</div>
+        <div id="hexGrid" class="hex-container"></div>
+        <button class="btn-close-hex" onclick="cerrarModalPicking()">VOLVER</button>
+    </div>
+
+    <div id="toast-container"></div>
 
     <div class="sidebar">
         <div class="brand">📦 FlexNet Ops</div>
@@ -122,13 +169,14 @@
                 <h1>Hoja de Ruta / Manifiesto de Carga</h1>
                 <p>FLEXNET LOGISTICS S.A.S</p>
                 <div class="stats">
-                    <span>Total general: <span class="stat-val" id="lblTotalTop">0</span></span>
+                    <span>Total en Picking <span id="lblPickingTxt">1</span>: <span class="stat-val" id="lblTotalTop">0</span></span>
                     <span>Mostrando (Ruta): <span class="stat-val" id="lblVisiblesTop">0</span></span>
                 </div>
             </div>
             <div class="user-pill">
                 <span id="displayOperador">Despachador: ---</span> • 
-                <span id="displayFecha" style="color:var(--text-muted); font-size: 0.8rem;">---</span>
+                <button id="btnAbrirMenuPicking" class="btn-picking" onclick="abrirModalPicking()">Picking Actual: 1 ⚙️</button>
+                • <span id="displayFecha" style="color:var(--text-muted); font-size: 0.8rem;">---</span>
             </div>
         </div>
 
@@ -209,6 +257,10 @@
     <script>
         let pedidosBase = [];
         
+        // 🌟 VARIABLES DE PICKING GLOBALES
+        let pickingActual = 1;
+        let pickingsDisponibles = new Set([1]);
+        
         const diccionarioTransporte = {
             "CARGO UNION": {
                 "ALEXIS CASTILLO": "PBQ5405",
@@ -243,6 +295,12 @@
                 window.location.href = 'index.html';
                 return;
             }
+
+            // 🌟 NUEVO: RECUPERAR EL PICKING QUE ESTABA SELECCIONADO DESDE ESCANEO/EVENTOS
+            const pickingGuardado = localStorage.getItem('picking_seleccionado_flexnet');
+            if (pickingGuardado) {
+                pickingActual = parseInt(pickingGuardado);
+            }
             
             document.getElementById('displayOperador').innerText = "Despachador: " + operador;
             document.getElementById('displayFecha').innerText = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase();
@@ -251,6 +309,19 @@
                 const datosGuardados = await localforage.getItem('pedidosEscaneados_flexnet');
                 if (datosGuardados && datosGuardados.length > 0) {
                     pedidosBase = datosGuardados;
+                    
+                    // EXTRAER PICKINGS DE LA MEMORIA
+                    pedidosBase.forEach(p => {
+                        if (p.Picking) pickingsDisponibles.add(p.Picking);
+                    });
+                    
+                    // Validamos que el picking que recuperamos de verdad exista, si no, vamos al último
+                    if (!pickingsDisponibles.has(pickingActual)) {
+                        pickingActual = Math.max(...Array.from(pickingsDisponibles)) || 1;
+                        localStorage.setItem('picking_seleccionado_flexnet', pickingActual);
+                    }
+
+                    renderizarHexagonos();
                     actualizarVista();
                 } else {
                     document.getElementById('tablaCuerpo').innerHTML = "<tr><td colspan='7' style='text-align:center; padding: 20px;'>No hay pedidos en la memoria. Vaya a Distribución para escanear.</td></tr>";
@@ -259,6 +330,62 @@
                 console.error("Error cargando base de datos:", e);
             }
         };
+
+        // --- 🌟 SISTEMA DE MENÚ FLOTANTE HEXAGONAL ---
+        function abrirModalPicking() {
+            document.getElementById('modalPicking').style.display = 'flex';
+            renderizarHexagonos();
+        }
+
+        function cerrarModalPicking() {
+            document.getElementById('modalPicking').style.display = 'none';
+        }
+
+        function renderizarHexagonos() {
+            const container = document.getElementById('hexGrid');
+            container.innerHTML = '';
+            
+            let arrayPickings = Array.from(pickingsDisponibles).sort((a,b) => a - b);
+            
+            arrayPickings.forEach(p => {
+                const isActive = p === pickingActual ? 'active' : '';
+                const iconColor = p === pickingActual ? 'var(--primary)' : 'white';
+                
+                container.innerHTML += `
+                    <div class="hex-wrapper ${isActive}" onclick="seleccionarPickingDesdeMenu(${p})">
+                        <div class="hex-inner">
+                            <div class="hex-icon" style="color: ${iconColor}">📦</div>
+                            <div class="hex-text">Picking ${p}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('lblPickingTxt').innerText = pickingActual;
+            document.getElementById('btnAbrirMenuPicking').innerText = `Picking Actual: ${pickingActual} ⚙️`;
+        }
+
+        function seleccionarPickingDesdeMenu(num) {
+            pickingActual = num;
+            
+            // 🌟 NUEVO: GUARDAR EL PICKING SELECCIONADO AL CAMBIAR
+            localStorage.setItem('picking_seleccionado_flexnet', pickingActual);
+            
+            cerrarModalPicking();
+            renderizarHexagonos(); 
+            actualizarVista();
+            mostrarNotificacion(`✅ Mostrando carga de Picking ${pickingActual}`, "var(--success)");
+        }
+
+        function mostrarNotificacion(msg, color) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            if (color) toast.style.backgroundColor = color;
+            toast.innerHTML = msg; 
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
 
         function cargarChoferes() {
             const proveedor = document.getElementById('selectProveedor').value;
@@ -319,7 +446,9 @@
             const tbody = document.getElementById('tablaCuerpo');
             tbody.innerHTML = "";
             
-            let filtrados = (filtro === "GENERAL") ? pedidosBase : pedidosBase.filter(p => String(p.Provincia || "").toUpperCase().trim() === filtro);
+            // LÓGICA DOBLE: Filtramos por Picking Actual y luego por Provincia
+            let listaPicking = pedidosBase.filter(p => (p.Picking || 1) === pickingActual);
+            let filtrados = (filtro === "GENERAL") ? listaPicking : listaPicking.filter(p => String(p.Provincia || "").toUpperCase().trim() === filtro);
 
             filtrados.forEach((p, i) => {
                 const tr = document.createElement('tr');
@@ -344,8 +473,7 @@
                 tbody.appendChild(tr);
             });
             
-            // 🌟 ACTUALIZAMOS LOS CONTADORES (Arriba y Abajo)
-            document.getElementById('lblTotalTop').innerText = pedidosBase.length;
+            document.getElementById('lblTotalTop').innerText = listaPicking.length;
             document.getElementById('lblVisiblesTop').innerText = filtrados.length;
             
             document.getElementById('totalPedidos').innerText = filtrados.length;
@@ -359,11 +487,14 @@
             const filtro = document.getElementById('filtroProvincia').value;
 
             if (!proveedor || !conductor || !vehiculo) {
-                return alert("Seleccione el Proveedor, Chofer y Placa antes de generar la ruta.");
+                return mostrarNotificacion("⚠️ Seleccione el Proveedor, Chofer y Placa antes de exportar.", "var(--warning)");
             }
 
-            let filtrados = (filtro === "GENERAL") ? pedidosBase : pedidosBase.filter(p => String(p.Provincia || "").toUpperCase().trim() === filtro);
-            if (filtrados.length === 0) return alert("No hay pedidos para exportar.");
+            // DOBLE FILTRO PARA EL EXCEL
+            let listaPicking = pedidosBase.filter(p => (p.Picking || 1) === pickingActual);
+            let filtrados = (filtro === "GENERAL") ? listaPicking : listaPicking.filter(p => String(p.Provincia || "").toUpperCase().trim() === filtro);
+            
+            if (filtrados.length === 0) return mostrarNotificacion(`⚠️ No hay pedidos en el Picking ${pickingActual} para exportar.`, "var(--warning)");
 
             let csvContent = "\uFEFFConductor;Vehículo;Índice de ruta;Parada;Título;Dirección;Tiempo de servicio;Tiempo estimado de llegada;Distancia;Carga;Carga total;Latitud;Longitud;Id de pedido;Advertencias;Capacidad 2;Capacidad 3;Comentario de la ruta;Notas;Zonas\n";
             
@@ -385,12 +516,16 @@
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = `Ruta_${proveedor.substring(0,5)}_${conductor}_${new Date().toISOString().split('T')[0]}.csv`;
+            // Agregamos el número de picking al nombre del excel
+            link.download = `Ruta_P${pickingActual}_${proveedor.substring(0,5)}_${conductor}_${new Date().toISOString().split('T')[0]}.csv`;
             link.click();
+            
+            mostrarNotificacion("✅ Excel generado correctamente.", "var(--success)");
         }
 
         async function cerrarSesion() {
             localStorage.removeItem('operador_actual');
+            localStorage.removeItem('picking_seleccionado_flexnet'); // Limpiamos la memoria del picking
             await localforage.clear();
             window.location.href = 'index.html';
         }
